@@ -7,28 +7,21 @@ model: opencode/qwen3.5-plus
 
 # Create PR: $ARGUMENTS
 
-## Step 1 — Check branch state
+## Step 1 — Analyse changes
 
 ```bash
 git status --short
 git branch --show-current
-```
-
-If there are uncommitted changes, stop and ask the user how to handle them
-(commit, stash, or abort). Do **not** auto-commit silently — the user might
-have intentional WIP they don't want in the PR.
-
-If the user confirms a commit, use:
-```bash
-git add -A
-git commit -m "<message you propose to the user first>"
-```
-
-## Step 2 — Analyse changes
-
-```bash
 git diff $(git merge-base HEAD main)..HEAD
 git log $(git merge-base HEAD main)..HEAD --oneline
+```
+
+## Step 2 — Commit changes
+
+If there are uncommitted changes, auto-commit:
+```bash
+git add -A
+git commit -m "<message you generate from diffs>"
 ```
 
 ## Step 3 — Draft the PR description
