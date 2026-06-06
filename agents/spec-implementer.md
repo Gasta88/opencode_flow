@@ -40,6 +40,12 @@ Read the full spec file you have been given. Identify:
 Also check `specs/issue-{KEY}-progress.md`. If any sub-tasks are already
 checked, skip them and resume from the first unchecked item.
 
+5. **External docs** — check if `specs/issue-{KEY}-extdocs.md` exists.
+   If it does, read it in full before beginning any implementation.
+   The extdocs file contains current API surfaces for the spec's external
+   dependencies. It overrides training-data assumptions about those libraries.
+   If extdocs says a method signature changed, follow extdocs.
+
 ---
 
 ## Execution rules

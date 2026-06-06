@@ -32,6 +32,17 @@ If any phase is unchecked, stop and print:
 Unfinished phases: <list>
 ```
 
+## Step 2.5 — Fetch external documentation
+
+Invoke `@external-scout` with:
+
+> Fetch external dependency docs for issue **$ARGUMENTS**.
+> Spec: `specs/issue-$ARGUMENTS-spec.md`
+
+If the scout returns `NO_EXTERNAL_DEPS`, skip to Step 3.
+Otherwise, `specs/issue-$ARGUMENTS-extdocs.md` is now written and the
+implementer will read it automatically.
+
 ## Step 3 — Delegate
 
 Invoke `@spec-implementer` with this exact task:
