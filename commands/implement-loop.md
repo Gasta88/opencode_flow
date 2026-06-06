@@ -37,6 +37,16 @@ must be ticked. If any phase is unchecked, stop and print:
 Unfinished phases: <list>
 ```
 
+## Step 2.5 — Fetch external documentation
+
+Invoke `@external-scout` with:
+
+> Fetch external dependency docs for issue **ISSUE_KEY**.
+> Spec: `specs/issue-ISSUE_KEY-spec.md`
+
+If the scout returns `NO_EXTERNAL_DEPS`, skip to Step 3.
+extdocs.md is fetched once before the loop begins and reused across all passes.
+
 ## Step 3 — Loop
 
 Initialize: PASS_NUMBER = 1, VERDICT = "FAIL"
