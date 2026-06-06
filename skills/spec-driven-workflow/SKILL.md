@@ -60,6 +60,7 @@ A checkbox that is not checked means the phase is not done.
 | `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) | Minor bugs, config changes, typos |
 | `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) | After spec is complete |
 | `/review-code` | `opencode/qwen3.5-plus` | `@code-reviewer` then `@code-review-filter` | Adversarial review of current diff |
+| `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` | After spec is complete — loops until DoD passes or budget exhausted |
 | `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (runs inline) | Open a PR with structured description |
 | `/handover` | `opencode/qwen3.6-plus` | — (runs inline) | Async handover document |
 
@@ -74,19 +75,23 @@ A checkbox that is not checked means the phase is not done.
 | `spec-implementer` | qwen3.6-plus | subagent | Implements from spec, tracks progress |
 | `code-reviewer` | kimi-k2.5 | subagent (hidden) | Adversarial diff review |
 | `code-review-filter` | qwen3.5-plus | subagent (hidden) | Filters reviewer findings |
+| `dod-evaluator` | qwen3.5-plus | subagent (hidden) | Binary PASS/FAIL verdict on DoD items |
 
 ---
 
-## Spec-as-attention-anchor (no native hooks)
+## Spec-as-attention-anchor and loop governance (no native hooks)
 
-OpenCode does not have Claude-Code-style PreToolUse / PostToolUse / Stop bash hooks.
-Equivalent behaviour is enforced **inside the agent prompts** instead:
+OpenCode does not have Claude-Code-style Stop hooks or `/goal`.
+Equivalent behaviour is enforced two ways:
 
-- `spec-implementer` is instructed to re-read the relevant spec section before every file edit.
-- `spec-implementer` blocks completion until every Definition-of-Done checkbox is satisfied.
-- Progress is updated after every sub-task.
+**Prompt-level (all commands):**
+- `spec-implementer` re-reads the spec before every file edit.
+- `spec-implementer` blocks completion until every DoD checkbox is satisfied.
 
-If you want true event-driven enforcement (e.g. injecting reminders on every edit),
-implement it as an OpenCode plugin using `tool.execute.before` / `tool.execute.after` —
-see https://opencode.ai/docs/plugins/ . Until then, treat the rules above as
-agent-prompt obligations, not infrastructure.
+**Loop-level (`/implement-loop` only):**
+- `dod-evaluator` provides independent PASS/FAIL verdicts after each implementer pass.
+- The dispatcher re-enters `spec-implementer` with targeted failure context until PASS or budget exhausted.
+- This replicates the `/goal` + separate evaluator pattern within OpenCode's command model.
+
+For true event-driven enforcement on every tool call, implement an OpenCode plugin
+using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/docs/plugins/
