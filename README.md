@@ -83,6 +83,3 @@ Every issue generates exactly three files in `specs/`:
 6. Run `/review-code` to get an adversarial review of your diff
 7. Run `/create-pr "Your PR title"` to open a pull request
 
-## License
-
-[Add your license here]

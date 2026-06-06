@@ -1,5 +1,6 @@
 ---
 description: Generate a comprehensive handover document for async collaboration
+argument-hint: <optional — describe what the next session will focus on>
 agent: build
 model: opencode/qwen3.6-plus
 ---
@@ -67,6 +68,11 @@ Use this exact structure:
 - Related PRs/issues
 - Design docs or specs
 ```
+
+## 7. Next Session
+Focus: $ARGUMENTS (if provided, else: "general continuation")
+Skills to load:
+- spec-driven-workflow (always)
 
 ## Save
 

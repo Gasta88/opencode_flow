@@ -46,13 +46,9 @@ Generate a description following this template:
 
 Write the description to `pr-description.md` in the repo root.
 
-**Important:** if `pr-description.md` is not already in `.gitignore`, append it
-before writing the file. This file is a working artefact — it must never be
+**Important:** never commit `pr-description.md`, it is a working artefact — it must never be
 committed.
 
-```bash
-grep -qxF 'pr-description.md' .gitignore 2>/dev/null || echo 'pr-description.md' >> .gitignore
-```
 
 ## Step 5 — Create the PR
 
@@ -63,6 +59,7 @@ gh pr create --title "$ARGUMENTS" --body-file pr-description.md
 If `gh` is not authenticated, stop and tell the user to run `gh auth login`.
 
 ## Step 6 — Clean up
+
 
 ```bash
 rm pr-description.md
