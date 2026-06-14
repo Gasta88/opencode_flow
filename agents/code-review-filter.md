@@ -3,7 +3,7 @@ name: code-review-filter
 description: Meta-reviewer that filters adversarial code review output. Removes false positives and nitpicks. Keeps only high-signal findings. Used by /review-code — do not invoke directly.
 mode: subagent
 hidden: true
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.6-plus
 temperature: 0.2
 permission:
   edit: deny

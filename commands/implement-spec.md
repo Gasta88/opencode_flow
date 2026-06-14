@@ -2,7 +2,7 @@
 description: Implement code changes from an existing spec file
 argument-hint: <ISSUE_KEY>
 agent: build
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.6-plus
 ---
 
 # Implement Spec: $ARGUMENTS

@@ -2,7 +2,7 @@
 description: Create a PR with a comprehensive description and context
 argument-hint: <pr-title>
 agent: build
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.6-plus
 ---
 
 # Create PR: $ARGUMENTS

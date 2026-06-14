@@ -2,7 +2,7 @@
 name: spec-analyst
 description: Generates a full 6-phase implementation spec from a light spec file. Use for stories, features, and complex bugs. Follows the 3-file persistence pattern under specs/.
 mode: subagent
-model: opencode/qwen3.6-plus
+model: opencode/qwen3.7-plus
 temperature: 0.2
 permission:
   edit: allow

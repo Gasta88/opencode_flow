@@ -56,13 +56,13 @@ A checkbox that is not checked means the phase is not done.
 
 | Command | Dispatcher model | Delegates to | When to use |
 |---------|------------------|--------------|-------------|
-| `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) | Stories, features, complex bugs |
-| `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) | Minor bugs, config changes, typos |
-| `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) | After spec is complete |
-| `/review-code` | `opencode/qwen3.5-plus` | `@code-reviewer` then `@code-review-filter` | Adversarial review of current diff |
-| `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` | After spec is complete — loops until DoD passes or budget exhausted |
-| `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (runs inline) | Open a PR with structured description |
-| `/handover` | `opencode/qwen3.6-plus` | — (runs inline) | Async handover document |
+| `/analyze-issue <path>` | `opencode/qwen3.6-plus` | `@spec-analyst` (qwen3.7-plus) | Stories, features, complex bugs |
+| `/analyze-issue <path> --quick` | `opencode/qwen3.6-plus` | `@spec-analyst-quick` (qwen3.6-plus) | Minor bugs, config changes, typos |
+| `/implement-spec <KEY>` | `opencode/qwen3.6-plus` | `@spec-implementer` (qwen3.7-plus) | After spec is complete |
+| `/review-code` | `opencode/qwen3.6-plus` | `@code-reviewer` then `@code-review-filter` | Adversarial review of current diff |
+| `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.6-plus` | `@spec-implementer` + `@dod-evaluator` | After spec is complete — loops until DoD passes or budget exhausted |
+| `/create-pr "<title>"` | `opencode/qwen3.6-plus` | — (runs inline) | Open a PR with structured description |
+| `/handover` | `opencode/qwen3.7-plus` | — (runs inline) | Async handover document |
 
 ---
 
@@ -70,12 +70,12 @@ A checkbox that is not checked means the phase is not done.
 
 | Agent | Model | Mode | Role |
 |-------|-------|------|------|
-| `spec-analyst` | qwen3.6-plus | subagent | Full 6-phase spec generation |
-| `spec-analyst-quick` | qwen3.5-plus | subagent | 2-phase compact spec |
-| `spec-implementer` | qwen3.6-plus | subagent | Implements from spec, tracks progress |
+| `spec-analyst` | qwen3.7-plus | subagent | Full 6-phase spec generation |
+| `spec-analyst-quick` | qwen3.6-plus | subagent | 2-phase compact spec |
+| `spec-implementer` | qwen3.7-plus | subagent | Implements from spec, tracks progress |
 | `code-reviewer` | kimi-k2.5 | subagent (hidden) | Adversarial diff review |
-| `code-review-filter` | qwen3.5-plus | subagent (hidden) | Filters reviewer findings |
-| `dod-evaluator` | qwen3.5-plus | subagent (hidden) | Binary PASS/FAIL verdict on DoD items |
+| `code-review-filter` | qwen3.6-plus | subagent (hidden) | Filters reviewer findings |
+| `dod-evaluator` | qwen3.6-plus | subagent (hidden) | Binary PASS/FAIL verdict on DoD items |
 
 ---
 

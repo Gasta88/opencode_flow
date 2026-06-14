@@ -2,7 +2,7 @@
 description: Implement a spec and loop until the Definition of Done is fully satisfied, or the turn budget is exhausted.
 argument-hint: <ISSUE_KEY> [--max-passes N]
 agent: build
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.6-plus
 ---
 
 # Implement Loop: $ARGUMENTS

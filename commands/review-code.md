@@ -1,7 +1,7 @@
 ---
 description: Run a 3-agent adversarial code review on the current git diff vs main
 agent: build
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.6-plus
 ---
 
 # Adversarial Code Review

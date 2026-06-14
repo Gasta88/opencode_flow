@@ -1,7 +1,7 @@
 ---
 description: Generate a full implementation spec from a light spec file. Add --quick for bugs and minor changes.
 agent: build
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.6-plus
 ---
 
 # Analyze Issue: $ARGUMENTS

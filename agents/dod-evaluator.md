@@ -3,7 +3,7 @@ name: dod-evaluator
 description: Evaluates whether a spec's Definition of Done is fully satisfied. Returns PASS or FAIL with reason. Used by /implement-loop — do not invoke directly.
 mode: subagent
 hidden: true
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.6-plus
 temperature: 0.1
 permission:
   edit: deny

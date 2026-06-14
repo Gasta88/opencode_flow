@@ -2,7 +2,7 @@
 description: Generate a comprehensive handover document for async collaboration
 argument-hint: <optional — describe what the next session will focus on>
 agent: build
-model: opencode/qwen3.6-plus
+model: opencode/qwen3.7-plus
 ---
 
 # Create Handover
