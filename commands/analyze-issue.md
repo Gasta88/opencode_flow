@@ -16,7 +16,10 @@ delegate to a subagent.
 Extract:
 - **FILE_PATH**: the first token (e.g. `specs/FEAT-123.md`)
 - **ISSUE_KEY**: the basename of FILE_PATH without the `.md` extension
-  (e.g. `specs/FEAT-123.md` → `FEAT-123`)
+  (e.g. `specs/FEAT-123.md` → `FEAT-123`).
+  If the derived ISSUE_KEY starts with `issue-`, strip that prefix
+  (e.g. `issue-FEAT-123` → `FEAT-123`). Strip only the first occurrence
+  (e.g. `issue-issue-FOO` → `issue-FOO`).
 - **QUICK_MODE**: `true` if `--quick` appears anywhere in `$ARGUMENTS`, else `false`
 
 ## Step 2 — Verify the file exists

@@ -3,3 +3,8 @@
 pr-description.md
 
 specs/*-extdocs.md
+
+specs/*
+
+# decisions.md is intentionally NOT gitignored — it is the one cross-issue
+# file that must be committed, unlike extdocs.md and pr-description.md

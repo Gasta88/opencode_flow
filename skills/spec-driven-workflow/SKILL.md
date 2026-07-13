@@ -13,10 +13,13 @@ Light Spec File
 specs/issue-FEAT-123-findings.md         ← raw file data
 specs/issue-FEAT-123-progress.md         ← phase tracking
 specs/issue-FEAT-123-spec.md             ← structured spec
+    ↓  /review-spec FEAT-123             (human approval gate; skipped for --quick)
     ↓  /implement-spec FEAT-123
 Code changes + tests                     ← spec re-read before every file edit
     ↓  /create-pr "<title>"
 PR
+
+decisions.md                             ← cross-issue architectural decisions (repo root)
 ```
 
 ---
@@ -58,7 +61,8 @@ A checkbox that is not checked means the phase is not done.
 |---------|------------------|--------------|-------------|
 | `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) | Stories, features, complex bugs |
 | `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) | Minor bugs, config changes, typos |
-| `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) | After spec is complete |
+| `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) | After spec is reviewed and approved |
+| `/review-spec <KEY> [--visual]` | `opencode/qwen3.6-plus` | `@spec-analyst` (on revision) | Human-gated review of a generated spec before implementation |
 | `/review-code` | `opencode/qwen3.5-plus` | `@code-reviewer` then `@code-review-filter` | Adversarial review of current diff |
 | `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` | After spec is complete — loops until DoD passes or budget exhausted |
 | `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (runs inline) | Open a PR with structured description |
@@ -95,3 +99,43 @@ Equivalent behaviour is enforced two ways:
 
 For true event-driven enforcement on every tool call, implement an OpenCode plugin
 using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/docs/plugins/
+
+---
+
+## Cross-Issue Knowledge: decisions.md
+
+`decisions.md` is a repo-root file that persists architectural rulings across
+issues. It ensures that decisions made during one issue are visible and
+enforceable during future unrelated issues.
+
+### Location
+Repo root: `decisions.md`
+
+### Format
+Each entry follows this structure:
+
+```markdown
+## <YYYY-MM-DD> — <short title>
+Issue: <ISSUE-KEY>
+Decision: <one paragraph>
+Rationale: <why>
+Alternatives considered: <what was rejected and why>
+Scope: <repo-wide | subsystem-name | specific-files>
+```
+
+### Read Contract
+| Agent | When | Purpose |
+|-------|------|---------|
+| `spec-analyst` | Before Phase 3 | Apply scoped decisions as constraints in the Technical Specification |
+| `spec-analyst-quick` | Before Phase 2 | Apply scoped decisions as constraints in the compact spec |
+| `code-reviewer` | Optional (within 3-lookup budget) | Flag diffs that contradict recorded decisions |
+
+### Write Contract
+| Agent | When | Condition |
+|-------|------|-----------|
+| `spec-analyst` | After Phase 6 | Only when the spec introduced a decision with repo-wide or cross-feature scope |
+| `spec-analyst-quick` | **Never** | Quick fixes do not generate architectural precedent |
+
+### Size Management
+`decisions.md` must remain small enough to read in a single context window.
+Pruning and sectioning strategies are noted as future work.

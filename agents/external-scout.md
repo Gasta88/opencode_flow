@@ -121,5 +121,4 @@ Source: {url}
   that contain no API docs, no blog posts, no Stack Overflow).
 - If a fetch returns an error or redirect loop, mark the package UNRESOLVED
   in the Not Fetched table.
-- extdocs.md is a working artefact. It must never be committed. Append
-  `specs/*-extdocs.md` to `.gitignore` if not already present.
+- extdocs.md is a working artefact. It must never be committed.

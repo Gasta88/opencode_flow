@@ -10,16 +10,18 @@ model: opencode/qwen3.5-plus
 
 Run:
 ```bash
-git diff $(git merge-base HEAD main)..HEAD
+BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
+[ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
+git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
 ```
 and:
 ```bash
-git log $(git merge-base HEAD main)..HEAD --oneline
+git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
 ```
 
 If the diff is empty, stop and print:
 ```
-✅ No changes detected vs main. Nothing to review.
+✅ No changes detected vs $BASE_BRANCH. Nothing to review.
 ```
 
 ## Step 2 — Guard against trivial diffs

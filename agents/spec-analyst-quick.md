@@ -47,6 +47,16 @@ MODE: quick
 
 ---
 
+## Pre-Phase 2 — Consult decisions.md (read-only)
+
+Before drafting the compact spec, read `decisions.md` at the repo root if it
+exists. Apply any decision whose Scope covers the current issue as a constraint.
+You must NOT write to `decisions.md` — quick fixes do not generate architectural
+precedent. If you encounter a decision worth recording, note it in the spec as
+a design smell and recommend the issue be re-classified for full-mode analysis.
+
+---
+
 ## Phase 2 — Compact Spec
 
 Search the codebase briefly (2–3 targeted `grep`/`glob` searches max) to identify

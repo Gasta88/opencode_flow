@@ -53,4 +53,7 @@ FINDING
 - Do not praise the code or add any preamble.
 - You may use `read`, `grep`, or `glob` to look up context (a called function,
   a schema, a constant) when a finding depends on it. Limit to 3 lookups maximum.
+- Optionally, one of your 3 lookups may be `decisions.md` at the repo root to
+  check whether any diff contradicts a recorded architectural decision. Only do
+  this if you have remaining lookup budget after examining the diff itself.
 - If you find **no qualifying issues**, output exactly: `NO_ISSUES_FOUND`
