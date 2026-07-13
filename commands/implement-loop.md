@@ -30,11 +30,41 @@ If either is missing, stop and print:
 ❌ Spec not found for ISSUE_KEY. Run /analyze-issue first.
 ```
 
-Read `specs/issue-ISSUE_KEY-progress.md`. Every phase checkbox (Phases 1–6)
-must be ticked. If any phase is unchecked, stop and print:
+## Step 2.1 — Reject quick-mode specs
+
+Read the first lines of `specs/issue-ISSUE_KEY-progress.md`. If it contains the
+line `MODE: quick`, stop and print:
+
+```
+❌ ISSUE_KEY was generated with --quick. /implement-loop requires a full spec
+   (Definition of Done section) to evaluate against.
+   Use /implement-spec ISSUE_KEY instead — quick specs complete in one pass
+   and don't need iterative DoD evaluation.
+```
+
+## Step 2.2 — Verify phase completion
+
+Read `specs/issue-ISSUE_KEY-progress.md`. Under the `## Phases` heading, scan
+all `- [ ]` / `- [x]` lines. Every checkbox must be `[x]`. If any checkbox is
+`[ ]`, stop and print:
 ```
 ❌ Spec for ISSUE_KEY is incomplete. Re-run /analyze-issue.
 Unfinished phases: <list>
+```
+
+## Step 2.3 — Human review gate (full-mode only)
+
+Read `specs/issue-ISSUE_KEY-progress.md`. If it contains `MODE: quick`, skip
+this step and continue to Step 2.5. (Note: quick-mode specs are already rejected
+by Step 2.1, so this is a defensive check.)
+
+Otherwise, search for a `## Human Review` section containing
+`- [x] Approved by user on <date>`. If the section is absent or the checkbox
+is unchecked, stop and print:
+```
+❌ Spec for ISSUE_KEY has not been human-reviewed.
+   Run /review-spec ISSUE_KEY to review and approve the spec before implementation.
+   (Quick-mode specs are exempt from this gate.)
 ```
 
 ## Step 2.5 — Fetch external documentation

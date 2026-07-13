@@ -15,10 +15,12 @@ up cold. Be specific. Vague handovers waste the next person's first hour.
 Run these commands and incorporate the output into the document:
 
 ```bash
+BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
+[ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
 git branch --show-current
 git log -10 --oneline
 git status --short
-git diff --stat $(git merge-base HEAD main)..HEAD 2>/dev/null
+git diff --stat $(git merge-base HEAD $BASE_BRANCH)..HEAD 2>/dev/null
 ```
 
 ## Document structure

@@ -24,7 +24,7 @@ tools:
   glob: true
   write: false
   edit: false
-  bash: false
+  bash: true
   webfetch: false
   websearch: false
 ---
@@ -37,6 +37,11 @@ You read evidence and return a binary verdict.
 You will receive:
 1. The spec file path (e.g. `specs/issue-FEAT-123-spec.md`)
 2. The progress file path (e.g. `specs/issue-FEAT-123-progress.md`)
+3. The test command(s) to run, as recorded in the spec's Phase 5 (Test Strategy)
+   under `### Test Command`. If no test command is recorded, you must attempt
+   to discover it from the project structure (look for pytest.ini, package.json,
+   Cargo.toml, go.mod, etc.). If no test command can be determined, treat the
+   item as UNVERIFIED.
 
 ## Your task
 
@@ -46,12 +51,27 @@ You will receive:
 2. Read `specs/issue-{KEY}-progress.md`. Locate `## Implementation Progress`.
    Check which sub-tasks are marked complete.
 
+2.5. Independently re-run the test command(s) using the bash tool.
+   - If the spec provides a test command under `### Test Command`, run it exactly.
+   - If no test command is recorded and you cannot discover one from the project
+     structure, treat all test-related DoD items as UNVERIFIED.
+   - Compare your re-run result against the test output claimed in `progress.md`.
+   - If your re-run PASSES and `progress.md` also reports PASS: the item is
+     verified by both sources.
+   - If your re-run FAILS but `progress.md` reports PASS: mark the item FAIL
+     with an explicit discrepancy note, e.g.:
+     `- <item>: FAIL — progress.md reports PASS, but independent re-run failed: <brief error>`
+   - If your re-run PASSES but `progress.md` reports no test output: verify
+     based on your re-run result alone.
+   - If the test command cannot be determined: mark the item UNVERIFIED.
+
 3. For each DoD item, determine if it is satisfied based solely on:
    - Checkboxes in progress.md
    - Test output recorded in progress.md
    - File existence you can verify with read/grep/glob
+   - Your independent test re-run results from Step 2.5
 
-   Do NOT infer. Do NOT assume. If you cannot verify it from the files above,
+   Do NOT infer. Do NOT assume. If you cannot verify it from the sources above,
    mark it UNVERIFIED (counts as failing).
 
 ## Output format
