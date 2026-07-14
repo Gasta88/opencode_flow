@@ -29,6 +29,7 @@ Every light feature spec generates exactly three files in `specs/`:
 | `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` | After spec is complete — loops until DoD passes or budget exhausted |
 | `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (runs inline) | Open a PR with structured description |
 | `/handover` | `opencode/qwen3.6-plus` | — (runs inline) | Async handover document |
+| `/letsgo <path> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N]` | `opencode/qwen3.6-plus` | all of the above, inlined | Full pipeline: analyze → auto-resolve spec conflicts (human escalation after budget) → implement (DoD loop or single pass) → adversarial review + remediation loop → PR |
 
 ---
 
@@ -42,6 +43,7 @@ Every light feature spec generates exactly three files in `specs/`:
 | `code-reviewer` | kimi-k2.5 | subagent (hidden) | Adversarial diff review |
 | `code-review-filter` | qwen3.5-plus | subagent (hidden) | Filters reviewer findings |
 | `dod-evaluator` | qwen3.5-plus | subagent (hidden) | Binary PASS/FAIL verdict on DoD items |
+| `spec-conflict-checker` | qwen3.5-plus | subagent (hidden) | Binary CLEAR/CONFLICTS verdict on a spec vs decisions.md and the codebase — used by `/letsgo` |
 
 ---
 
@@ -57,6 +59,19 @@ Loop behaviour is enforced via:
 **Loop-level (`/implement-loop` only):**
 - `dod-evaluator` provides independent PASS/FAIL verdicts after each implementer pass.
 - The dispatcher re-enters `spec-implementer` with targeted failure context until PASS or budget exhausted.
+
+**Loop-level (`/letsgo` only):** three independent bounded loops, chained:
+- Spec-conflict loop: `spec-conflict-checker` gives CLEAR/CONFLICTS verdicts;
+  `spec-analyst` revises on CONFLICTS, up to `--max-spec-turns` (default 3).
+  Unresolved after budget → falls through to the same human approve/request-changes/reject
+  gate `/review-spec` uses, since automation cannot force-close a genuine
+  ambiguity.
+- Implementation loop: identical to `/implement-loop`'s, budget `--max-impl-passes`
+  (default 3). Unresolved after budget → asks the human whether to continue or stop.
+- Code-review remediation loop: `code-reviewer` + `code-review-filter` produce
+  findings; `spec-implementer` fixes them; re-review until clean or
+  `--max-fix-passes` (default 3). Unresolved after budget → asks the human
+  whether to continue or stop.
 
 For event-driven enforcement on every tool call, implement an OpenCode plugin
 using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/docs/plugins/

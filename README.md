@@ -21,6 +21,7 @@ Specialized AI subagents with distinct roles:
 | `spec-implementer` | qwen3.6-plus | Implements code from specs, tracking progress and tests |
 | `code-reviewer` | kimi-k2.5 | Adversarial code reviewer — finds bugs, logic errors, and security issues |
 | `code-review-filter` | qwen3.5-plus | Meta-reviewer that filters false positives and nitpicks from review output |
+| `spec-conflict-checker` | qwen3.5-plus | Binary CLEAR/CONFLICTS verdict on a spec vs `decisions.md` and the codebase — used by `/letsgo` |
 
 ### Commands (`commands/`)
 
@@ -35,6 +36,7 @@ User-invokable workflows that orchestrate agents:
 | `/review-code` | Run adversarial code review on the current git diff |
 | `/create-pr "<title>"` | Create a PR with a structured description, auto-generated from the diff |
 | `/handover` | Generate a comprehensive handover document for async collaboration |
+| `/letsgo <path> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N]` | Run the entire pipeline end-to-end: analyze → auto-resolve spec conflicts (escalating to a human only if unresolved) → implement → adversarial review with a fix loop → PR |
 
 ### Skills (`skills/`)
 
@@ -60,6 +62,30 @@ PR
 ```
 
 **Note:** Use `/review-spec` to approve full-mode specs before implementation. Quick-mode specs (`--quick`) skip this gate. Use `/implement-spec` for `--quick` specs (bugs, minor changes). Use `/implement-loop` for full specs that have a `## Definition of Done` section and need iterative evaluation.
+
+### One-shot pipeline: `/letsgo`
+
+`/letsgo specs/FEAT-123.md` runs the whole thing above end-to-end in a single
+command, with automated gates in place of manual command-by-command driving:
+
+```
+Light Spec File
+    ↓  /letsgo specs/FEAT-123.md
+1. Analyze issue                → spec-analyst / spec-analyst-quick
+2. Auto-resolve spec conflicts  → spec-conflict-checker + spec-analyst, up to 3 turns
+     ↳ still unresolved?        → escalate to a real human (approve/request-changes/reject)
+3. Implement                    → spec-implementer (+ dod-evaluator loop for full specs)
+4. Adversarial code review      → code-reviewer + code-review-filter
+5. Remediate findings           → spec-implementer fixes, re-review, up to 3 passes
+     ↳ still unresolved?        → ask the human whether to continue or stop
+6. Create PR                    → title auto-derived from the spec
+PR
+```
+
+A real human is only interrupted when automation genuinely cannot resolve
+something — an unresolved spec conflict after 3 turns, an unmet DoD after the
+implementation pass budget, or residual code review findings after the fix
+budget. See `commands/letsgo.md` for the full step-by-step logic.
 
 ## The 3-File Pattern
 
@@ -91,4 +117,6 @@ Every issue generates exactly three files in `specs/`:
 7. Run `/implement-spec FEAT-123` to execute the changes
 8. Run `/review-code` to get an adversarial review of your diff
 9. Run `/create-pr "Your PR title"` to open a pull request
+
+Or run the whole thing in one command: `/letsgo specs/FEAT-123.md`.
 
