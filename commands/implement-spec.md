@@ -33,18 +33,14 @@ all `- [ ]` / `- [x]` lines. Every checkbox must be `[x]`. If any checkbox is
 Unfinished phases: <list>
 ```
 
-## Step 2.3 — Human review gate (full-mode only)
+## Step 2.3 — Human review gate
 
 Read `specs/issue-$ARGUMENTS-progress.md`. If it contains `MODE: quick`, skip
-this step and continue to Step 2.5.
-
-Otherwise, search for a `## Human Review` section containing
-`- [x] Approved by user on <date>`. If the section is absent or the checkbox
-is unchecked, stop and print:
+this step. Otherwise, search for a `## Human Review` section containing
+`- [x] Approved by user on <date>`. If absent or unchecked, stop and print:
 ```
 ❌ Spec for $ARGUMENTS has not been human-reviewed.
-   Run /review-spec $ARGUMENTS to review and approve the spec before implementation.
-   (Quick-mode specs are exempt from this gate.)
+   Run /review-spec $ARGUMENTS first.
 ```
 
 ## Step 2.5 — Fetch external documentation
@@ -65,8 +61,6 @@ Invoke `@spec-implementer` with this exact task:
 > Implement issue **$ARGUMENTS** from `specs/issue-$ARGUMENTS-spec.md`.
 > Track progress in `specs/issue-$ARGUMENTS-progress.md`.
 > Follow the spec-driven-workflow skill exactly.
-> The spec is the single source of truth — re-read the relevant section before
-> every file edit.
 
 ## Step 4 — Report
 

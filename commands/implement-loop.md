@@ -52,19 +52,13 @@ all `- [ ]` / `- [x]` lines. Every checkbox must be `[x]`. If any checkbox is
 Unfinished phases: <list>
 ```
 
-## Step 2.3 — Human review gate (full-mode only)
+## Step 2.3 — Human review gate
 
-Read `specs/issue-ISSUE_KEY-progress.md`. If it contains `MODE: quick`, skip
-this step and continue to Step 2.5. (Note: quick-mode specs are already rejected
-by Step 2.1, so this is a defensive check.)
-
-Otherwise, search for a `## Human Review` section containing
-`- [x] Approved by user on <date>`. If the section is absent or the checkbox
-is unchecked, stop and print:
+Read `specs/issue-ISSUE_KEY-progress.md`. Search for a `## Human Review` section
+containing `- [x] Approved by user on <date>`. If absent or unchecked, stop and print:
 ```
 ❌ Spec for ISSUE_KEY has not been human-reviewed.
-   Run /review-spec ISSUE_KEY to review and approve the spec before implementation.
-   (Quick-mode specs are exempt from this gate.)
+   Run /review-spec ISSUE_KEY first.
 ```
 
 ## Step 2.5 — Fetch external documentation
@@ -90,7 +84,6 @@ If PASS_NUMBER == 1, invoke `@spec-implementer` with:
 > Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`.
 > Track progress in `specs/issue-ISSUE_KEY-progress.md`.
 > Follow the spec-driven-workflow skill exactly.
-> The spec is the single source of truth — re-read the relevant section before every file edit.
 
 If PASS_NUMBER > 1, you have a FAIL reason from the previous evaluation.
 Invoke `@spec-implementer` with:

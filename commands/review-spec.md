@@ -113,7 +113,8 @@ Regenerate only the affected sections. Do not discard Phase 1–2 work.
 Update progress.md to reflect which phases were re-done.
 ```
 
-4. After regeneration, re-present the updated spec (Step 3) and re-prompt for decision (Step 4).
+4. After regeneration, present only the changed sections with a summary of what
+   was modified, then re-prompt for decision (Step 4).
 
 ## Step 5c — On rejection
 

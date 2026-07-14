@@ -53,9 +53,7 @@ For each finding in the reviewer output, decide: **keep or reject**.
 If there are surviving findings, print them using this exact format:
 
 ```
-╔══════════════════════════════════════════════════════╗
-║         ADVERSARIAL CODE REVIEW — RESULTS            ║
-╚══════════════════════════════════════════════════════╝
+## Code Review Results
 
   ❌  <Category> — <File>:<Lines>
       Issue:   <one sentence>
@@ -65,23 +63,21 @@ If there are surviving findings, print them using this exact format:
   ❌  <Category> — <File>:<Lines>
       ...
 
-──────────────────────────────────────────────────────
+---
   <N> issue(s) flagged  |  <M> rejected as low-signal
-──────────────────────────────────────────────────────
+---
 ```
 
 If **no findings survive** (or the reviewer returned `NO_ISSUES_FOUND`), print:
 
 ```
-╔══════════════════════════════════════════════════════╗
-║         ADVERSARIAL CODE REVIEW — RESULTS            ║
-╚══════════════════════════════════════════════════════╝
+## Code Review Results
 
   ✅  No high-signal issues found. The diff looks clean.
 
-──────────────────────────────────────────────────────
+---
   0 issues flagged  |  <M> rejected as low-signal
-──────────────────────────────────────────────────────
+---
 ```
 
 ## Rules

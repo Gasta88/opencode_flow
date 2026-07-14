@@ -53,11 +53,8 @@ checked, skip them and resume from the first unchecked item.
 ### 1. One sub-task at a time
 Complete sub-task N fully before starting N+1. Never skip ahead.
 
-### 2. Spec is the source of truth — re-read before every edit
-**Before editing any source file, re-read the relevant section of the spec
-in the same turn.** OpenCode does not have automated edit-time hooks; this
-discipline is yours to maintain.
-
+### 2. Spec is the source of truth
+The spec governs all implementation decisions. Keep the spec in context while working.
 If the codebase and the spec conflict, the spec wins — unless there is a
 clear technical blocker. In that case, note the blocker in `progress.md`
 under `## Errors` and ask the user before deviating.

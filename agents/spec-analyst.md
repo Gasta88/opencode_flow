@@ -38,7 +38,7 @@ Before any analysis, create these three files in `specs/`:
 | `specs/issue-{KEY}-progress.md` | Phase checkboxes + error log | Initialised now, updated each phase |
 | `specs/issue-{KEY}-spec.md` | Final spec, assembled section by section | Written progressively, never all at once |
 
-Initialise `progress.md` right now with all boxes unchecked:
+Initialise `progress.md` right now:
 
 ```markdown
 # Spec Progress: issue-{KEY}
@@ -52,8 +52,7 @@ Initialise `progress.md` right now with all boxes unchecked:
 - [ ] Phase 6: Definition of Done written
 
 ## Errors
-| Phase | Error | Attempt | Resolution |
-|-------|-------|---------|------------|
+(none yet)
 ```
 
 ---
@@ -220,8 +219,7 @@ Update `progress.md`: mark Phase 6 complete.
 After completing Phase 6, evaluate whether the Technical Specification
 introduced any decision with repo-wide or cross-feature scope (e.g. new
 library choice, new architectural pattern, rejected alternative worth
-remembering). Apply this test: "Would a spec-analyst working on an unrelated
-issue six weeks from now make a better decision by having read this?"
+remembering). Apply this test: "Would another team benefit from knowing this?"
 
 If YES: append a new entry to `decisions.md` using the documented format.
 If NO: do not write anything. Not every spec produces a decision entry.

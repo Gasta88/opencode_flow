@@ -48,29 +48,13 @@ Stop here.
 
 For each package, determine the canonical documentation URL using this priority:
 
-1. Official docs site (e.g. `docs.getdbt.com`, `docs.pydantic.dev`,
-   `prefect.io/docs`, `pola.rs/docs`)
+1. Official docs site (e.g. `docs.getdbt.com`, `docs.pydantic.dev`)
 2. If no dedicated docs site: the package's GitHub README
    (`https://github.com/{org}/{repo}#readme`)
 3. PyPI project page as a last resort (`https://pypi.org/project/{name}/`)
 
 Do not guess URLs. If you cannot determine a reliable URL for a package, mark
 it as UNRESOLVED and skip the fetch.
-
-**Known URL patterns for common MLOps/data packages:**
-| Package | Docs URL pattern |
-|---------|-----------------|
-| dbt-core / dbt | `https://docs.getdbt.com/reference/` |
-| pydantic | `https://docs.pydantic.dev/latest/` |
-| polars | `https://docs.pola.rs/api/python/stable/reference/` |
-| prefect | `https://docs.prefect.io/latest/` |
-| great-expectations | `https://docs.greatexpectations.io/docs/` |
-| sqlmodel | `https://sqlmodel.tiangolo.com/` |
-| fastapi | `https://fastapi.tiangolo.com/reference/` |
-| httpx | `https://www.python-httpx.org/api/` |
-| boto3 | `https://boto3.amazonaws.com/v1/documentation/api/latest/index.html` |
-
-For packages not in this list, derive the URL from the package name and purpose.
 
 ## Step 3 — Fetch and summarise
 

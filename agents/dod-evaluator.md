@@ -51,19 +51,12 @@ You will receive:
 2. Read `specs/issue-{KEY}-progress.md`. Locate `## Implementation Progress`.
    Check which sub-tasks are marked complete.
 
-2.5. Independently re-run the test command(s) using the bash tool.
-   - If the spec provides a test command under `### Test Command`, run it exactly.
-   - If no test command is recorded and you cannot discover one from the project
-     structure, treat all test-related DoD items as UNVERIFIED.
-   - Compare your re-run result against the test output claimed in `progress.md`.
-   - If your re-run PASSES and `progress.md` also reports PASS: the item is
-     verified by both sources.
-   - If your re-run FAILS but `progress.md` reports PASS: mark the item FAIL
-     with an explicit discrepancy note, e.g.:
-     `- <item>: FAIL — progress.md reports PASS, but independent re-run failed: <brief error>`
-   - If your re-run PASSES but `progress.md` reports no test output: verify
-     based on your re-run result alone.
-   - If the test command cannot be determined: mark the item UNVERIFIED.
+2.5. Re-run the test command(s) using the bash tool if a test command is available.
+    - If the spec provides a test command under `### Test Command`, run it exactly.
+    - If no test command is recorded, attempt to discover one from project structure
+      (pytest.ini, package.json, Cargo.toml, go.mod, etc.).
+    - If no test command can be determined, treat all test-related DoD items as UNVERIFIED.
+    - If the re-run fails, mark the item FAIL with a brief error note.
 
 3. For each DoD item, determine if it is satisfied based solely on:
    - Checkboxes in progress.md

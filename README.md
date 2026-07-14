@@ -76,7 +76,7 @@ Every issue generates exactly three files in `specs/`:
 - **Data before analysis** — Raw spec data is persisted immediately before any reasoning
 - **Spec before code** — Implementation never starts without a complete spec
 - **Human review before implementation** — Full-mode specs require explicit human approval via `/review-spec` before any code is written; quick-mode specs are exempt
-- **Spec as attention anchor** — The spec is re-read before every file edit during implementation
+- **Spec as attention anchor** — The spec governs all implementation decisions
 - **Progress is always current** — Every phase and error is logged in real-time to `progress.md`
 - **Adversarial review** — Code is reviewed by a critical AI, then filtered by a meta-reviewer to surface only high-signal findings
 

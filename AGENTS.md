@@ -32,16 +32,14 @@ Specification section.
 
 ## Rule 4 — Spec as Attention Anchor
 
-During implementation, re-read the relevant section of `issue-{KEY}-spec.md`
-before every file edit. The spec is the single source of truth. If the codebase
+During implementation, the spec is the single source of truth. If the codebase
 and the spec conflict, the spec wins (unless there is a technical blocker — in
 which case, log it in `progress.md` under `## Errors`).
 
 ## Rule 5 — Progress is Always Current
 
-Update `issue-{KEY}-progress.md` immediately after every phase completion and
-every error. A checkbox that is not checked means the phase is not done. Do not
-batch updates — write them as they happen.
+Update `issue-{KEY}-progress.md` after every phase completion and every error.
+A checkbox that is not checked means the phase is not done.
 
 ## Rule 6 — Definition of Done is a Gate
 

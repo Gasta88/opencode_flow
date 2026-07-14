@@ -5,53 +5,15 @@ description: Use when working with light spec files, generating specs, or implem
 
 # Spec-Driven Workflow
 
-## The Lifecycle
-
-```
-Light Spec File
-    ↓  /analyze-issue FEAT-123           (or --quick for small issues)
-specs/issue-FEAT-123-findings.md         ← raw file data
-specs/issue-FEAT-123-progress.md         ← phase tracking
-specs/issue-FEAT-123-spec.md             ← structured spec
-    ↓  /review-spec FEAT-123             (human approval gate; skipped for --quick)
-    ↓  /implement-spec FEAT-123
-Code changes + tests                     ← spec re-read before every file edit
-    ↓  /create-pr "<title>"
-PR
-
-decisions.md                             ← cross-issue architectural decisions (repo root)
-```
-
----
-
 ## The 3-File Pattern
 
-Every light feature spec gets exactly three files, all inside `specs/`:
+Every light feature spec generates exactly three files in `specs/`:
 
-| File | Purpose | Written |
-|------|---------|---------|
-| `issue-{KEY}-findings.md` | Verbatim light spec file content + raw codebase notes | **First** — before any analysis |
-| `issue-{KEY}-progress.md` | Phase checkboxes and error log | Initialized at start, updated each phase |
-| `issue-{KEY}-spec.md` | The structured implementation spec | Last — assembled section by section |
-
----
-
-## Core Rules
-
-**Data before analysis.**
-After reading the light spec file → write findings.md immediately, before reasoning over the data.
-If analysis fails mid-way, the data is safe and the agent can resume.
-
-**Spec before code.**
-`specs/issue-{KEY}-spec.md` must be complete before `/implement-spec` is run.
-
-**Spec as attention anchor.**
-During implementation, the agent re-reads the relevant spec section before every file edit.
-The spec is the single source of truth. Code follows spec, not the other way around.
-
-**Progress is always current.**
-Every phase completion and every error gets logged to progress.md immediately.
-A checkbox that is not checked means the phase is not done.
+| File | Purpose |
+|------|---------|
+| `issue-{KEY}-findings.md` | Raw light spec content (verbatim) |
+| `issue-{KEY}-progress.md` | Phase checkboxes, implementation progress, and error log |
+| `issue-{KEY}-spec.md` | Structured implementation spec with requirements, technical details, test strategy, and definition of done |
 
 ---
 
@@ -83,21 +45,20 @@ A checkbox that is not checked means the phase is not done.
 
 ---
 
-## Spec-as-attention-anchor and loop governance (no native hooks)
+## Loop governance
 
 OpenCode does not have Claude-Code-style Stop hooks or `/goal`.
-Equivalent behaviour is enforced two ways:
+Loop behaviour is enforced via:
 
-**Prompt-level (all commands):**
-- `spec-implementer` re-reads the spec before every file edit.
+**Prompt-level:**
+- `spec-implementer` follows the spec as the single source of truth.
 - `spec-implementer` blocks completion until every DoD checkbox is satisfied.
 
 **Loop-level (`/implement-loop` only):**
 - `dod-evaluator` provides independent PASS/FAIL verdicts after each implementer pass.
 - The dispatcher re-enters `spec-implementer` with targeted failure context until PASS or budget exhausted.
-- This replicates the `/goal` + separate evaluator pattern within OpenCode's command model.
 
-For true event-driven enforcement on every tool call, implement an OpenCode plugin
+For event-driven enforcement on every tool call, implement an OpenCode plugin
 using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/docs/plugins/
 
 ---
@@ -105,37 +66,10 @@ using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/d
 ## Cross-Issue Knowledge: decisions.md
 
 `decisions.md` is a repo-root file that persists architectural rulings across
-issues. It ensures that decisions made during one issue are visible and
-enforceable during future unrelated issues.
-
-### Location
-Repo root: `decisions.md`
-
-### Format
-Each entry follows this structure:
-
-```markdown
-## <YYYY-MM-DD> — <short title>
-Issue: <ISSUE-KEY>
-Decision: <one paragraph>
-Rationale: <why>
-Alternatives considered: <what was rejected and why>
-Scope: <repo-wide | subsystem-name | specific-files>
-```
-
-### Read Contract
-| Agent | When | Purpose |
-|-------|------|---------|
-| `spec-analyst` | Before Phase 3 | Apply scoped decisions as constraints in the Technical Specification |
-| `spec-analyst-quick` | Before Phase 2 | Apply scoped decisions as constraints in the compact spec |
-| `code-reviewer` | Optional (within 3-lookup budget) | Flag diffs that contradict recorded decisions |
+issues. See AGENTS.md Rule 3 for the read contract.
 
 ### Write Contract
 | Agent | When | Condition |
 |-------|------|-----------|
 | `spec-analyst` | After Phase 6 | Only when the spec introduced a decision with repo-wide or cross-feature scope |
 | `spec-analyst-quick` | **Never** | Quick fixes do not generate architectural precedent |
-
-### Size Management
-`decisions.md` must remain small enough to read in a single context window.
-Pruning and sectioning strategies are noted as future work.
