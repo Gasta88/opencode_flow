@@ -45,15 +45,39 @@ Initialise `progress.md` right now:
 
 ## Phases
 - [ ] Phase 1: light spec file data fetched → findings.md
+      Evidence: <source file path + line count>
 - [ ] Phase 2: Requirements extracted
+      Evidence: <what was extracted from findings.md>
 - [ ] Phase 3: Technical spec drafted
+      Evidence: <files examined via grep/glob>
 - [ ] Phase 4: Implementation plan written
+      Evidence: <sub-task count + complexity rationale>
 - [ ] Phase 5: Test strategy written
+      Evidence: <test types covered>
 - [ ] Phase 6: Definition of Done written
+      Evidence: <DoD item count, mapped to plan sub-tasks>
 
 ## Errors
-(none yet)
+| Phase | Error | Attempt | Resolution |
+|-------|-------|---------|------------|
 ```
+
+---
+
+## Rule 0.5 — Ground every claim in evidence
+
+Every assertion in the spec must be traceable to either:
+- The light spec file (via `findings.md`), or
+- A codebase lookup you actually ran (`grep`/`glob`/`read`), or
+- A decision entry in `decisions.md`.
+
+If you cannot verify a claim from these sources, mark it explicitly:
+
+> NEEDS VERIFICATION: <what claim and why you could not verify it>
+
+Do not invent file paths, API signatures, or library versions. If you are unsure,
+flag it with `NEEDS VERIFICATION` and proceed — the implementer or the
+external-scout will resolve it.
 
 ---
 
@@ -62,7 +86,7 @@ Initialise `progress.md` right now:
 1. Read the light spec file.
 2. Write the **complete raw content** verbatim to `specs/issue-{KEY}-findings.md`.
    Do not summarise. Do not interpret. Raw data only. This file is the source of truth.
-3. Update `progress.md`: mark Phase 1 complete.
+3. Update `progress.md`: mark Phase 1 complete with an `Evidence:` line.
 
 ---
 
@@ -89,7 +113,7 @@ Read `findings.md`. Then create `specs/issue-{KEY}-spec.md` with this section:
 - Security: ...
 ```
 
-Update `progress.md`: mark Phase 2 complete.
+Update `progress.md`: mark Phase 2 complete with an `Evidence:` line.
 
 ---
 
@@ -143,7 +167,7 @@ Response:
 |---------|---------|---------|
 ```
 
-Update `progress.md`: mark Phase 3 complete.
+Update `progress.md`: mark Phase 3 complete with an `Evidence:` line.
 
 ---
 
@@ -165,7 +189,7 @@ Break the work into 5–7 sub-tasks. Append to `spec.md`:
 | ... | medium | ... |
 ```
 
-Update `progress.md`: mark Phase 4 complete.
+Update `progress.md`: mark Phase 4 complete with an `Evidence:` line.
 
 ---
 
@@ -192,7 +216,7 @@ Append to `spec.md`:
 - [ ] ...
 ```
 
-Update `progress.md`: mark Phase 5 complete.
+Update `progress.md`: mark Phase 5 complete with an `Evidence:` line.
 
 ---
 
@@ -210,7 +234,7 @@ Append to `spec.md`:
 - [ ] Code review approved
 ```
 
-Update `progress.md`: mark Phase 6 complete.
+Update `progress.md`: mark Phase 6 complete with an `Evidence:` line.
 
 ---
 

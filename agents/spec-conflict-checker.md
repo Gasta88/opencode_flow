@@ -101,4 +101,3 @@ CONFLICTS
 ```
 
 No preamble. No commentary outside the two formats above. Binary output only.
-</content>
