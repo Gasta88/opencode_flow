@@ -46,3 +46,19 @@ A checkbox that is not checked means the phase is not done.
 Do not declare implementation complete until every checkbox in the spec's
 `## Definition of Done` section is satisfied. If any item is unmet, continue
 working or log the blocker in `progress.md`.
+
+## Rule 7 — Evidence is the gate
+
+A progress checkbox without an `Evidence:` line is not done. Every checked box
+in `issue-{KEY}-progress.md` must carry an `Evidence:` sub-line documenting
+what was done and what the result was (test command + output, run-log excerpt,
+or an explicit note that verification was not possible). A checked box with
+no `Evidence:` line counts as unchecked.
+
+## Rule 8 — Decide, don't guess
+
+On a judgment call, consult root `decisions.md` first. If no decision covers
+the case, escalate via the three-option protocol from the `spec-driven-workflow`
+skill (`🔀 Decision needed:` with Option A / Option B / Recommended). Record
+the ruling as a dated block appended to `decisions.md`. Never invent a
+decision silently.

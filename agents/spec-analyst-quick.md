@@ -40,7 +40,9 @@ You may write into `specs/` only. Do not modify source files.
 
 MODE: quick
 - [ ] Phase 1: light spec file data fetched → findings.md
+      Evidence: <source file path + line count>
 - [ ] Phase 2: Compact spec written
+      Evidence: <files examined + change summary>
 ```
 
 4. Mark Phase 1 complete in `progress.md`.

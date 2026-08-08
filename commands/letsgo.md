@@ -188,7 +188,7 @@ Invoke `@spec-implementer` with:
 > Track progress in `specs/issue-ISSUE_KEY-progress.md`.
 > Follow the spec-driven-workflow skill exactly.
 
-Print `✅ Implementation complete for ISSUE_KEY.` and proceed to **Step 6**.
+Print `✅ Implementation complete for ISSUE_KEY.` and proceed to **Step 5b**.
 
 ### If QUICK_MODE is `false` — DoD-gated loop
 
@@ -240,7 +240,7 @@ If DOD_VERDICT == "PASS", print:
 ```
 ✅ Implementation complete for ISSUE_KEY (pass IMPL_PASS-1/MAX_IMPL_PASSES). All DoD items satisfied.
 ```
-and proceed to **Step 6**.
+and proceed to **Step 5b** (test gate).
 
 If DOD_VERDICT == "FAIL" after MAX_IMPL_PASSES passes, stop and ask the user:
 ```
@@ -249,12 +249,63 @@ If DOD_VERDICT == "FAIL" after MAX_IMPL_PASSES passes, stop and ask the user:
 FAIL_REASON
 
 How would you like to proceed?
-  [C] Continue to code review & PR anyway
+  [C] Continue to test gate & code review anyway
   [S] Stop here — I'll finish this manually
 ```
 If the user chooses Stop, print `⚠️  Stopping /letsgo. See specs/issue-ISSUE_KEY-progress.md.`
-and end the pipeline. If Continue, proceed to **Step 6** noting the unmet DoD
+and end the pipeline. If Continue, proceed to **Step 5b** noting the unmet DoD
 items in the final report.
+
+---
+
+## Step 5b — Convention-based test-suite gate
+
+Look up the test command in this order (first match wins):
+
+1. **AGENTS.md** — look for a `## Test` / `## Tests` / `## Testing` heading
+2. **README.md** — same headings
+3. **Makefile** — look for a `test:` target
+
+If none of these yield a command, fall back to heuristics:
+- `pytest` / `pytest tests/` if `pytest` is in the project
+- `npm test` if `package.json` exists
+- `go test ./...` if `go.mod` exists
+- `cargo test` if `Cargo.toml` exists
+
+If no test command can be found, **skip with a printed note**:
+```
+ℹ️  No test command found in AGENTS.md, README.md, or Makefile, and no heuristic matched. Skipping test gate.
+```
+Set TEST_RESULT = "skipped" and TEST_SOURCE = "not found" and proceed to **Step 6**.
+
+Otherwise, record TEST_SOURCE = `<file where the command was found>` and run the test command.
+
+### If tests pass
+
+Print `✅ Tests passed (source: TEST_SOURCE).`
+Set TEST_RESULT = "passed" and proceed to **Step 6**.
+
+### If tests fail
+
+Run a bounded fix loop (up to MAX_FIX_PASSES passes):
+
+For each fix pass, invoke `@code-fixer` with the test output and the list of
+failing tests. If a fix requires spec context (e.g. the failure is about
+missing functionality the spec describes), fall back to `@spec-implementer`
+instead. After each fix, re-run the test command.
+
+If tests pass within budget, print:
+```
+✅ Tests passed after N fix pass(es) (source: TEST_SOURCE).
+```
+Set TEST_RESULT = "passed-after-fix" and proceed to **Step 6**.
+
+If tests still fail after MAX_FIX_PASSES, print:
+```
+⚠️  Tests still failing after MAX_FIX_PASSES fix passes (source: TEST_SOURCE).
+    Continuing to code review — residual test failures will be noted in the final report.
+```
+Set TEST_RESULT = "failed" and proceed to **Step 6**.
 
 ---
 
@@ -306,7 +357,15 @@ FINAL_OUTPUT
 
 **7d — Fix, if needed**
 
-If ISSUES_REMAIN and FIX_PASS < MAX_FIX_PASSES, invoke `@spec-implementer` with:
+If ISSUES_REMAIN and FIX_PASS < MAX_FIX_PASSES, invoke `@code-fixer` with:
+
+> Address the following code review findings for issue **ISSUE_KEY**.
+> Findings:
+> FINAL_OUTPUT
+> Fix only what is listed. Read the current file state before editing.
+
+If a finding requires spec context (e.g. the fix needs to understand the
+spec's intended behavior), fall back to `@spec-implementer` with:
 
 > Address the following code review findings for issue **ISSUE_KEY**.
 > Spec: `specs/issue-ISSUE_KEY-spec.md`
@@ -427,11 +486,11 @@ Print a summary of the whole run:
 ```
 🎉 /letsgo complete for ISSUE_KEY
 
-  Spec:        <auto-resolved in N turns | human-approved after escalation>
+  Spec:          <auto-resolved in N turns | human-approved after escalation>
   Implementation: <PASS in N passes | continued with unmet DoD items>
-  Code review: <clean in N passes | continued with residual findings>
-  PR:          <URL returned by gh pr create>
+  Test suite:    <passed | passed-after-fix | failed | skipped> (source: TEST_SOURCE)
+  Code review:   <clean in N passes | continued with residual findings>
+  PR:            <URL returned by gh pr create>
 
 See specs/issue-ISSUE_KEY-progress.md for the full audit trail.
 ```
-</content>
