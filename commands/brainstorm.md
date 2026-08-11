@@ -17,6 +17,65 @@ analyze the codebase in depth. You produce a **light spec file** that
 Extract **KEY** from `$ARGUMENTS` (e.g. `FEAT-123` or `add-cache-layer`).
 If a second token is present, treat it as a brief topic seed.
 
+### GitHub issue detection
+
+If the first token of `$ARGUMENTS` matches `^[0-9]+$`, treat it as a GitHub
+issue number.
+
+**Detection:**
+- Set **ISSUE_NUMBER** = first token.
+- Set **KEY** = ISSUE_NUMBER (as a string).
+
+**Fetch:**
+Run:
+```bash
+gh issue view <ISSUE_NUMBER> --json number,title,body,url,state
+```
+- If `gh` is not authenticated or the call fails, stop and print:
+```
+❌ Could not fetch GitHub issue #<ISSUE_NUMBER>. Run `gh auth login` or verify the issue exists.
+```
+- If `state` is `CLOSED`, print a non-blocking warning and continue:
+```
+⚠️  GitHub issue #<ISSUE_NUMBER> is closed. Proceeding anyway.
+```
+
+**Check for existing light spec:**
+- If `specs/{KEY}.md` already exists: read it and offer the user the existing
+  Refine/Replace/Abort prompt unchanged (an existing local file always wins;
+  the GitHub fetch is not used to silently overwrite manual work).
+- If `specs/{KEY}.md` does not exist: print:
+```
+Found GitHub issue #{ISSUE_NUMBER}: "{title}"
+How would you like to proceed?
+  [R] Refine interactively — walk through Problem/Why now/Outcome/etc. using the issue as a starting point
+  [U] Use as-is — write the issue content directly as the light spec, skip ideation
+```
+  - On **[R] Refine**: proceed to Step 1. Seed every section's "recommended
+    answer" using the fetched issue title + body instead of just KEY/topic-seed.
+    Append a `## Source` section to the final light spec noting the GitHub
+    issue URL.
+  - On **[U] Use as-is**: skip Step 1 entirely. Write `specs/{KEY}.md`:
+```markdown
+# {KEY}
+
+<!-- Source: GitHub Issue #{KEY} — {url} -->
+
+## Title
+{issue title}
+
+## Body
+{issue body, verbatim}
+
+## Source
+- GitHub Issue: {url}
+```
+  Then proceed to Step 3.
+
+### Non-numeric KEY
+
+If the first token does NOT match `^[0-9]+$`, proceed with the existing behavior:
+
 Check if `specs/{KEY}.md` already exists.
 
 - If it exists: read it and offer the user:
@@ -104,6 +163,13 @@ Write the brief to `specs/{KEY}.md` in this format:
 ### Alternatives considered
 - <alternative 1>: <why not>
 - <alternative 2>: <why not>
+```
+
+If this brainstorm was initiated from a GitHub issue number, append:
+
+```markdown
+## Source
+- GitHub Issue: {url}
 ```
 
 ---
