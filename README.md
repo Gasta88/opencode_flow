@@ -19,9 +19,9 @@ Specialized AI subagents with distinct roles:
 | `spec-analyst` | qwen3.6-plus | Generates full 6-phase implementation specs from light spec files |
 | `spec-analyst-quick` | qwen3.5-plus | Fast-path 2-phase specs for bugs, typos, and minor changes |
 | `spec-implementer` | qwen3.6-plus | Implements code from specs, tracking progress and tests |
-| `code-reviewer` | kimi-k2.5 | Adversarial code reviewer — finds bugs, logic errors, and security issues |
+| `code-reviewer` | kimi-k2.7-code | Adversarial code reviewer — finds bugs, logic errors, and security issues |
 | `code-review-filter` | qwen3.5-plus | Meta-reviewer that filters false positives and nitpicks from review output |
-| `spec-conflict-checker` | qwen3.5-plus | Binary CLEAR/CONFLICTS verdict on a spec vs `decisions.md` and the codebase — used by `/letsgo` |
+| `spec-conflict-checker` | deepseek-v4-flash | Binary CLEAR/CONFLICTS verdict on a spec vs `decisions.md` and the codebase — used by `/letsgo` |
 
 ### Commands (`commands/`)
 
