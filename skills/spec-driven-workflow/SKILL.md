@@ -117,11 +117,11 @@ When an agent (or a human) offers an excuse to skip a step, apply the matching r
 | `spec-analyst` | qwen3.6-plus | subagent | Full 6-phase spec generation |
 | `spec-analyst-quick` | qwen3.5-plus | subagent | 2-phase compact spec |
 | `spec-implementer` | qwen3.6-plus | subagent | Implements from spec, tracks progress |
-| `code-fixer` | qwen3.5-plus | subagent (hidden) | Surgical fixer — applies review findings one at a time |
-| `code-reviewer` | kimi-k2.5 | subagent (hidden) | Adversarial diff review |
+| `code-fixer` | deepseek-v4-flash | subagent (hidden) | Surgical fixer — applies review findings one at a time |
+| `code-reviewer` | kimi-k2.7-code | subagent (hidden) | Adversarial diff review |
 | `code-review-filter` | qwen3.5-plus | subagent (hidden) | Filters reviewer findings |
-| `dod-evaluator` | qwen3.5-plus | subagent (hidden) | Binary PASS/FAIL verdict on DoD items |
-| `spec-conflict-checker` | qwen3.5-plus | subagent (hidden) | Binary CLEAR/CONFLICTS verdict on a spec vs decisions.md and the codebase — used by `/letsgo` |
+| `dod-evaluator` | deepseek-v4-flash | subagent (hidden) | Binary PASS/FAIL verdict on DoD items |
+| `spec-conflict-checker` | deepseek-v4-flash | subagent (hidden) | Binary CLEAR/CONFLICTS verdict on a spec vs decisions.md and the codebase — used by `/letsgo` |
 | `external-scout` | qwen3.5-plus | subagent (hidden) | Fetches current docs for external dependencies listed in specs |
 
 ---

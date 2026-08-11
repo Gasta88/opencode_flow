@@ -3,7 +3,7 @@ name: spec-conflict-checker
 description: Automated pre-implementation check for conflicts between a generated spec, decisions.md, and the current codebase. Returns CLEAR or CONFLICTS with reasons. Used by /letsgo — do not invoke directly.
 mode: subagent
 hidden: true
-model: opencode/qwen3.5-plus
+model: opencode/deepseek-v4-flash
 temperature: 0.1
 permission:
   edit: deny
