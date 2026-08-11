@@ -12,6 +12,11 @@ No code is written without a spec. Every change begins as a light spec file in
 The only exception is `--quick` mode for trivial bugs and typos, which still
 produces a compact spec.
 
+Light spec files can be created manually, or sourced directly from a GitHub
+issue by passing a bare issue number to `/brainstorm`, `/analyze-issue`, or
+`/letsgo` (e.g., `/brainstorm 123`). A purely numeric first argument is always
+interpreted as a GitHub issue reference.
+
 ## Rule 2 — Skill Loading
 
 Always load the `spec-driven-workflow` skill at the start of any session that

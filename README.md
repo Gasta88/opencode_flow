@@ -29,14 +29,15 @@ User-invokable workflows that orchestrate agents:
 
 | Command | Description |
 |---------|-------------|
-| `/analyze-issue <path>` | Generate an implementation spec from a light spec file (add `--quick` for minor changes) |
+| `/brainstorm <KEY or issue#>` | Pre-spec ideation — explore a problem before `/analyze-issue` (accepts a bare GitHub issue number) |
+| `/analyze-issue <path or issue#>` | Generate an implementation spec from a light spec file (add `--quick` for minor changes; accepts a bare GitHub issue number) |
 | `/review-spec <KEY>` | Human-gated review of a generated spec before implementation (skipped for `--quick`) |
 | `/implement-spec <KEY>` | Execute code changes from a completed spec (works with both quick and full specs) |
 | `/implement-loop <KEY>` | Implement a spec and loop until DoD is satisfied (requires full spec, not `--quick`) |
 | `/review-code` | Run adversarial code review on the current git diff |
 | `/create-pr "<title>"` | Create a PR with a structured description, auto-generated from the diff |
 | `/handover` | Generate a comprehensive handover document for async collaboration |
-| `/letsgo <path> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N]` | Run the entire pipeline end-to-end: analyze → auto-resolve spec conflicts (escalating to a human only if unresolved) → implement → adversarial review with a fix loop → PR |
+| `/letsgo <path or issue#> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N]` | Run the entire pipeline end-to-end: analyze → auto-resolve spec conflicts (escalating to a human only if unresolved) → implement → adversarial review with a fix loop → PR (accepts a bare GitHub issue number) |
 
 ### Skills (`skills/`)
 
@@ -119,4 +120,37 @@ Every issue generates exactly three files in `specs/`:
 9. Run `/create-pr "Your PR title"` to open a pull request
 
 Or run the whole thing in one command: `/letsgo specs/FEAT-123.md`.
+
+### Using GitHub Issue Numbers
+
+Instead of creating a light spec file manually, you can pass a bare GitHub
+issue number directly to `/brainstorm`, `/analyze-issue`, and `/letsgo`:
+
+```
+/brainstorm 123
+/analyze-issue 123
+/letsgo 123
+```
+
+When given a numeric argument, the command fetches the GitHub issue via the
+`gh` CLI (`gh issue view`) and uses it as the light spec. The issue
+title and body are materialized into `specs/{NUMBER}.md` automatically.
+
+**Prerequisites:**
+- The `gh` CLI must be installed and authenticated (`gh auth login`).
+- A purely numeric first argument is **always** interpreted as a GitHub issue
+  number, not a manual KEY.
+
+**`/brainstorm` with an issue number:**
+- If no `specs/{NUMBER}.md` exists, you'll be prompted to choose between:
+  - `[R] Refine interactively` — walk through the problem using the issue as a starting point
+  - `[U] Use as-is` — write the issue content directly as the light spec
+- If `specs/{NUMBER}.md` already exists, the existing Refine/Replace/Abort
+  prompt fires instead (manual work is never silently overwritten).
+
+**`/analyze-issue` and `/letsgo` with an issue number:**
+- If `specs/{NUMBER}.md` does not exist, it is created from the GitHub issue
+  and the pipeline proceeds normally.
+- If `specs/{NUMBER}.md` already exists (e.g., from an earlier `/brainstorm`),
+  it is reused without re-fetching.
 

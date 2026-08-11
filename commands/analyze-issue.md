@@ -22,6 +22,50 @@ Extract:
   (e.g. `issue-issue-FOO` → `issue-FOO`).
 - **QUICK_MODE**: `true` if `--quick` appears anywhere in `$ARGUMENTS`, else `false`
 
+## Step 1.5 — GitHub issue detection & materialize
+
+If the first token of `$ARGUMENTS` matches `^[0-9]+$`, treat it as a GitHub
+issue number instead of a file path.
+
+**Detection:**
+- Extract **ISSUE_NUMBER** from the first token.
+- Set **ISSUE_KEY** = ISSUE_NUMBER (as a string).
+- Set **FILE_PATH** = `specs/{ISSUE_KEY}.md`.
+
+**Fetch:**
+Run:
+```bash
+gh issue view <ISSUE_NUMBER> --json number,title,body,url,state
+```
+- If `gh` is not authenticated or the call fails, stop and print:
+```
+❌ Could not fetch GitHub issue #<ISSUE_NUMBER>. Run `gh auth login` or verify the issue exists.
+```
+- If `state` is `CLOSED`, print a non-blocking warning and continue:
+```
+⚠️  GitHub issue #<ISSUE_NUMBER> is closed. Proceeding anyway.
+```
+
+**Materialize:**
+- If `FILE_PATH` already exists on disk, use it as-is (do not overwrite) and
+  proceed to Step 2.
+- If `FILE_PATH` does not exist, write it:
+```markdown
+# {ISSUE_KEY}
+
+<!-- Source: GitHub Issue #{ISSUE_KEY} — {url} -->
+
+## Title
+{issue title}
+
+## Body
+{issue body, verbatim}
+```
+Then proceed to Step 2.
+
+If the first token does NOT match `^[0-9]+$`, skip this step entirely and
+proceed to Step 2 with the existing FILE_PATH and ISSUE_KEY from Step 1.
+
 ## Step 2 — Verify the file exists
 
 Check that FILE_PATH exists and is readable. If not, stop and print:
