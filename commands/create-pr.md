@@ -7,22 +7,13 @@ model: opencode/qwen3.5-plus
 
 # Create PR: $ARGUMENTS
 
-## Step 1 — Analyse changes
+## Step 1 — Commit any uncommitted changes
 
-```bash
-BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
-[ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
-git status --short
-git branch --show-current
-git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
-git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
-```
+Run `git status --short` to check for uncommitted changes.
 
-## Step 2 — Review and commit changes
+If the working tree is clean (no output), skip to Step 2.
 
-If the working tree is clean (no output from `git status --short`), skip to Step 3.
-
-1. Run `git status --short` and print the full list of changed files to the user.
+1. Print the full list of changed files to the user.
 
 2. Scan the file list for common risk patterns before proposing anything:
    `.env`, `.env.*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `.DS_Store`
@@ -37,9 +28,20 @@ If the working tree is clean (no output from `git status --short`), skip to Step
       re-running /create-pr.
    ```
 
-3. If no risk patterns are found, generate the commit message from the diff as
-   before. Print the proposed commit message and the file list together, and ask
+3. If no risk patterns are found, generate the commit message from the diff.
+   Print the proposed commit message and the file list together, and ask
    the user to confirm before running `git add -A && git commit`.
+
+## Step 2 — Analyse changes
+
+```bash
+BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
+[ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
+git status --short
+git branch --show-current
+git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
+git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
+```
 
 ## Step 3 — Draft the PR description
 

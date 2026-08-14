@@ -17,21 +17,34 @@ Run:
 ```bash
 BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
 [ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
-git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
+
+# Committed changes vs main
+COMMITTED_DIFF=$(git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD 2>/dev/null || true)
+
+# Staged but uncommitted changes
+STAGED_DIFF=$(git diff --cached HEAD 2>/dev/null || true)
+
+# Unstaged working tree changes
+UNSTAGED_DIFF=$(git diff HEAD 2>/dev/null || true)
+
+# Combined diff for review
+FULL_DIFF="${COMMITTED_DIFF}
+${STAGED_DIFF}
+${UNSTAGED_DIFF}"
 ```
 and:
 ```bash
 git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
 ```
 
-If the diff is empty, stop and print:
+If `FULL_DIFF` is empty, stop and print:
 ```
 ✅ No changes detected vs $BASE_BRANCH. Nothing to review.
 ```
 
 ## Step 2 — Guard against trivial diffs
 
-Count the changed lines (additions + deletions, ignoring file headers).
+Count the changed lines (additions + deletions, ignoring file headers) from `FULL_DIFF`.
 If fewer than 5 lines changed, print:
 ```
 ℹ️  Diff is trivial (<5 lines). Skipping adversarial review.
@@ -45,7 +58,7 @@ Invoke `@code-reviewer` with this exact prompt:
 > Review the following git diff.
 >
 > ---DIFF START---
-> <full diff output from Step 1>
+> <FULL_DIFF from Step 1>
 > ---DIFF END---
 >
 > Recent commits for context:
@@ -65,7 +78,7 @@ Invoke `@code-review-filter` with this exact prompt:
 >
 > Original diff for reference:
 > ---DIFF START---
-> <full diff output from Step 1>
+> <FULL_DIFF from Step 1>
 > ---DIFF END---
 
 Capture the full response as FINAL_OUTPUT.
@@ -90,7 +103,7 @@ Capture the response as FIXER_OUTPUT.
 
 ### 5b — Re-collect the diff
 
-Run the same git diff and log commands from Step 1.
+Run the same git diff commands from Step 1 to produce a new FULL_DIFF.
 
 ### 5c — Re-review
 
