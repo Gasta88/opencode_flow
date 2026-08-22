@@ -51,21 +51,7 @@ Unfinished phases: <list>
 
 ## Step 3 — Present the spec
 
-Read `specs/issue-ISSUE_KEY-spec.md` in full.
-
-If `--visual` flag is present:
-- Render the spec as a single-page HTML document.
-- The Implementation Plan sub-tasks must appear as an interactive checklist.
-- If HTML rendering is not available, gracefully fall back to text output below.
-
-Otherwise, present the spec section by section:
-1. Requirements (User Story, Acceptance Criteria, Functional Requirements, Non-Functional Requirements)
-2. Technical Specification (Files to Modify, Files to Create, API Contracts, External Dependencies)
-3. Implementation Plan
-4. Test Strategy
-5. Definition of Done
-
-Print each section with a clear header separator.
+Read `specs/issue-ISSUE_KEY-spec.md` in full. If `--visual` flag is present, render as HTML with the Implementation Plan as an interactive checklist (fall back to text if unavailable). Otherwise, present section by section: Requirements, Technical Specification, Implementation Plan, Test Strategy, Definition of Done.
 
 ## Step 4 — Prompt for decision
 

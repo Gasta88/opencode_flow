@@ -33,20 +33,11 @@ You will receive in the user message:
 
 ## Your task
 
-For each finding in the reviewer output, decide: **keep or reject**.
+For each finding, decide: **keep or reject**.
 
-**Keep** a finding only if ALL of these are true:
-- Confidence is genuinely high (verify it against the diff — do not trust the label alone)
-- Priority is high or medium
-- The issue is real and reproducible from the diff, not speculative
-- It is actionable: the developer knows exactly what to change
+**Keep** only if ALL true: verified against diff (not just the label), high/medium priority, real and reproducible, actionable.
 
-**Reject** a finding if ANY of these are true:
-- It is a style nag or formatting preference in disguise
-- It is speculative ("this might cause...") without concrete evidence in the diff
-- It is a nitpick that would not cause a bug, data loss, or security issue
-- The suggested fix is vague or requires guessing at intent
-- It duplicates another finding at a different line
+**Reject** if ANY true: style/formatting preference, speculative ("this might cause..."), nitpick with no bug/data-loss/security impact, vague fix, or duplicate.
 
 ## Output format
 
@@ -55,12 +46,12 @@ If there are surviving findings, print them using this exact format:
 ```
 ## Code Review Results
 
-  ❌  <Category> — <File>:<Lines>
+  ❌  <Category> [critical | warning | nitpick] — <File>:<Lines>
       Issue:   <one sentence>
       Impact:  <one sentence>
       Fix:     <concrete instruction or code>
 
-  ❌  <Category> — <File>:<Lines>
+  ❌  <Category> [critical | warning | nitpick] — <File>:<Lines>
       ...
 
 ---
@@ -80,11 +71,9 @@ If **no findings survive** (or the reviewer returned `NO_ISSUES_FOUND`), print:
 ---
 ```
 
+Severity: **critical** = bug/security/data-loss/runtime failure, **warning** = potential bug under certain conditions, **nitpick** = naming/style only.
+
 ## Rules
 
-- **Maximum 3 findings in the output.** If more than 3 survive your filter,
-  keep only the 3 with the highest priority and discard the rest (count the
-  discarded ones as rejected in the footer).
-- Do not add commentary, suggestions, or preamble outside the format above.
-- Do not reword or re-rank findings — reproduce them faithfully.
-- The rejected count in the footer must be accurate.
+- **Maximum 3 findings.** Keep top 3 by priority; count the rest as rejected.
+- No commentary outside the format. Reproduce findings faithfully. Footer count must be accurate.

@@ -25,56 +25,37 @@ git diff --stat $(git merge-base HEAD $BASE_BRANCH)..HEAD 2>/dev/null
 
 ## Document structure
 
-Use this exact structure:
-
+Use this structure:
 ```markdown
 # Handover — <YYYY-MM-DD HH:MM>
 
 ## 1. Progress Summary
-- Tasks completed this session
-- Current implementation state
-- What's working, what's blocked
+- Tasks completed, current state, what's working/blocked
 
 ## 2. Technical Context
-- Branch: <current branch>
-- Recent commits:
-  <git log -10 --oneline output>
-- Modified files:
-  <git status --short output>
-- Diff stats vs main:
-  <git diff --stat output>
+- Branch: <branch>
+- Commits: <git log -10 --oneline>
+- Modified: <git status --short>
+- Diff stats: <git diff --stat vs main>
 
 ## 3. Decisions Made
-- Technical choices and the reasoning behind them
-- Trade-offs considered
-- Alternatives rejected (and why)
+- Technical choices, trade-offs, rejected alternatives
 
 ## 4. Active Blockers
-- External dependencies waiting on
-- Unresolved technical questions
-- Resource needs
+- External dependencies, unresolved questions, resource needs
 
 ## 5. Next Steps
-
-### Immediate Priority
-1. <specific task with acceptance criteria>
-
-### Secondary Tasks
+1. <immediate task with acceptance criteria>
 2. <follow-up work>
-
-### Future Considerations
 3. <tech debt, optimisations>
 
 ## 6. References
-- Relevant documentation links
-- Related PRs/issues
-- Design docs or specs
-```
+- Links to docs, PRs, specs
 
 ## 7. Next Session
-Focus: $ARGUMENTS (if provided, else: "general continuation")
-Skills to load:
-- spec-driven-workflow (always)
+Focus: $ARGUMENTS (or "general continuation")
+Skills: spec-driven-workflow
+```
 
 ## Save
 

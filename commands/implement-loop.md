@@ -32,15 +32,8 @@ If either is missing, stop and print:
 
 ## Step 2.1 — Reject quick-mode specs
 
-Read the first lines of `specs/issue-ISSUE_KEY-progress.md`. If it contains the
-line `MODE: quick`, stop and print:
-
-```
-❌ ISSUE_KEY was generated with --quick. /implement-loop requires a full spec
-   (Definition of Done section) to evaluate against.
-   Use /implement-spec ISSUE_KEY instead — quick specs complete in one pass
-   and don't need iterative DoD evaluation.
-```
+Read `specs/issue-ISSUE_KEY-progress.md`. If it contains `MODE: quick`, stop and print:
+`❌ ISSUE_KEY is a quick-mode spec. Use /implement-spec instead — quick specs skip iterative DoD evaluation.`
 
 ## Step 2.2 — Verify phase completion
 
@@ -80,19 +73,10 @@ Repeat until VERDICT == "PASS" or PASS_NUMBER > MAX_PASSES:
 ### 3a — Implement pass
 
 If PASS_NUMBER == 1, invoke `@spec-implementer` with:
+> Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`. Track progress. Follow the skill exactly.
 
-> Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`.
-> Track progress in `specs/issue-ISSUE_KEY-progress.md`.
-> Follow the spec-driven-workflow skill exactly.
-
-If PASS_NUMBER > 1, you have a FAIL reason from the previous evaluation.
-Invoke `@spec-implementer` with:
-
-> Resume implementation of **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`.
-> The previous pass failed the DoD evaluation. Unsatisfied items:
-> <FAIL_REASON from previous evaluator output>
-> Address only the failing items. Do not re-implement what is already passing.
-> Track all changes in `specs/issue-ISSUE_KEY-progress.md`.
+If PASS_NUMBER > 1, invoke `@spec-implementer` with:
+> Resume **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`. Previous DoD failures: <FAIL_REASON>. Address only failing items. Track progress.
 
 ### 3b — Evaluate
 

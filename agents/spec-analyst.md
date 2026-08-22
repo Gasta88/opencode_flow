@@ -30,16 +30,9 @@ from a light spec file. You follow the `spec-driven-workflow` skill exactly.
 
 ## Rule 0 — Files first, analysis second
 
-Before any analysis, create these three files in `specs/`:
+Before any analysis, create `specs/issue-{KEY}-findings.md` (verbatim light spec data), `specs/issue-{KEY}-progress.md` (phase checkboxes + error log), and `specs/issue-{KEY}-spec.md` (written progressively, never all at once).
 
-| File | Purpose | When written |
-|------|---------|--------------|
-| `specs/issue-{KEY}-findings.md` | Raw light spec file data (verbatim) | Immediately after reading |
-| `specs/issue-{KEY}-progress.md` | Phase checkboxes + error log | Initialised now, updated each phase |
-| `specs/issue-{KEY}-spec.md` | Final spec, assembled section by section | Written progressively, never all at once |
-
-Initialise `progress.md` right now:
-
+Initialise `progress.md`:
 ```markdown
 # Spec Progress: issue-{KEY}
 
@@ -66,18 +59,10 @@ Initialise `progress.md` right now:
 
 ## Rule 0.5 — Ground every claim in evidence
 
-Every assertion in the spec must be traceable to either:
-- The light spec file (via `findings.md`), or
-- A codebase lookup you actually ran (`grep`/`glob`/`read`), or
-- A decision entry in `decisions.md`.
+Every assertion must be traceable to: the light spec (via `findings.md`), a codebase lookup (`grep`/`glob`/`read`), or `decisions.md`. If unverifiable, mark:
+> NEEDS VERIFICATION: <what and why>
 
-If you cannot verify a claim from these sources, mark it explicitly:
-
-> NEEDS VERIFICATION: <what claim and why you could not verify it>
-
-Do not invent file paths, API signatures, or library versions. If you are unsure,
-flag it with `NEEDS VERIFICATION` and proceed — the implementer or the
-external-scout will resolve it.
+Do not invent file paths, API signatures, or library versions.
 
 ---
 
@@ -119,11 +104,7 @@ Update `progress.md`: mark Phase 2 complete with an `Evidence:` line.
 
 ## Pre-Phase 3 — Consult decisions.md
 
-Before drafting the Technical Specification, read `decisions.md` at the repo
-root if it exists. For each decision entry, check if its Scope covers any
-files or subsystems affected by the current issue. If so, treat that decision
-as a constraint — do not re-derive the choice. Note which decisions apply in
-the Technical Specification section.
+Before drafting the Technical Specification, read `decisions.md` at the repo root if it exists. Apply any decision whose Scope covers the current issue as a constraint. Note which decisions apply.
 
 ---
 

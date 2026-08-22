@@ -79,50 +79,36 @@ Do not create `specs/decisions.md`. Do not use `DEC-NNN` identifiers. The repo-r
 
 ---
 
-## Rationalizations
-
-When an agent (or a human) offers an excuse to skip a step, apply the matching rebuttal:
-
-| Excuse | Rebuttal |
-|--------|----------|
-| "I already understand the light spec file, no need to read it again." | Understanding ≠ evidence. Read it, write findings.md, then proceed. |
-| "I'll fill in the Evidence lines at the end." | Evidence recorded after the fact is unreliable. Log it as you go. |
-| "The spec is vague here — I'll just do what makes sense." | Vague spec → Decision Escalation Protocol. Do not invent requirements. |
-| "This is a small change, I can skip the test run." | Small changes cause regressions. Run the test command or log why you cannot. |
-| "I've seen this pattern before, I know the API." | APIs change. If extdocs exist, read them. If not, verify with a lookup. |
-
----
-
 ## Commands
 
-| Command | Dispatcher model | Delegates to | When to use |
-|---------|------------------|--------------|-------------|
-| `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) | Stories, features, complex bugs |
-| `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) | Minor bugs, config changes, typos |
-| `/brainstorm <path>` | `opencode/qwen3.6-plus` | — (runs inline) | Pre-spec ideation — produces a light spec file for `/analyze-issue` to consume |
-| `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) | After spec is reviewed and approved |
-| `/review-spec <KEY> [--visual]` | `opencode/qwen3.6-plus` | `@spec-analyst` (on revision) | Human-gated review of a generated spec before implementation |
-| `/review-code [--max-fix-passes N]` | `opencode/qwen3.5-plus` | `@code-reviewer` → `@code-review-filter` → `@code-fixer` (loop) | Adversarial review of current diff with bounded fix loop |
-| `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` | After spec is complete — loops until DoD passes or budget exhausted |
-| `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (runs inline) | Open a PR with structured description |
-| `/handover` | `opencode/qwen3.6-plus` | — (runs inline) | Async handover document |
-| `/letsgo <path> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N]` | `opencode/qwen3.6-plus` | all of the above, inlined | Full pipeline: analyze → auto-resolve spec conflicts (human escalation after budget) → implement (DoD loop or single pass) → adversarial review + remediation loop → PR |
+| Command | Dispatcher | Delegates to |
+|---------|-----------|--------------|
+| `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) |
+| `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) |
+| `/brainstorm <path>` | `opencode/qwen3.6-plus` | — (inline) |
+| `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) |
+| `/review-spec <KEY> [--visual]` | `opencode/qwen3.6-plus` | `@spec-analyst` (on revision) |
+| `/review-code [--max-fix-passes N]` | `opencode/qwen3.5-plus` | `@code-reviewer` → `@code-review-filter` → `@code-fixer` |
+| `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` |
+| `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (inline) |
+| `/handover` | `opencode/qwen3.6-plus` | — (inline) |
+| `/letsgo <path> [--quick] [...]` | `opencode/qwen3.6-plus` | all above, chained |
 
 ---
 
 ## Subagents
 
-| Agent | Model | Mode | Role |
-|-------|-------|------|------|
-| `spec-analyst` | qwen3.6-plus | subagent | Full 6-phase spec generation |
-| `spec-analyst-quick` | qwen3.5-plus | subagent | 2-phase compact spec |
-| `spec-implementer` | qwen3.6-plus | subagent | Implements from spec, tracks progress |
-| `code-fixer` | deepseek-v4-flash | subagent (hidden) | Surgical fixer — applies review findings one at a time |
-| `code-reviewer` | kimi-k2.7-code | subagent (hidden) | Adversarial diff review |
-| `code-review-filter` | qwen3.5-plus | subagent (hidden) | Filters reviewer findings |
-| `dod-evaluator` | deepseek-v4-flash | subagent (hidden) | Binary PASS/FAIL verdict on DoD items |
-| `spec-conflict-checker` | deepseek-v4-flash | subagent (hidden) | Binary CLEAR/CONFLICTS verdict on a spec vs decisions.md and the codebase — used by `/letsgo` |
-| `external-scout` | qwen3.5-plus | subagent (hidden) | Fetches current docs for external dependencies listed in specs |
+| Agent | Mode | Role |
+|-------|------|------|
+| `spec-analyst` | subagent | Full 6-phase spec generation |
+| `spec-analyst-quick` | subagent | 2-phase compact spec |
+| `spec-implementer` | subagent | Implements from spec, tracks progress |
+| `code-fixer` | subagent (hidden) | Surgical fixer — applies review findings |
+| `code-reviewer` | subagent (hidden) | Adversarial diff review |
+| `code-review-filter` | subagent (hidden) | Filters reviewer findings |
+| `dod-evaluator` | subagent (hidden) | Binary PASS/FAIL on DoD items |
+| `spec-conflict-checker` | subagent (hidden) | CLEAR/CONFLICTS verdict on spec vs decisions.md + codebase |
+| `external-scout` | subagent (hidden) | Fetches current docs for external dependencies |
 
 ---
 
@@ -159,11 +145,6 @@ using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/d
 
 ## Cross-Issue Knowledge: decisions.md
 
-`decisions.md` is a repo-root file that persists architectural rulings across
-issues. See AGENTS.md Rule 3 for the read contract.
+`decisions.md` persists architectural rulings across issues. Read before drafting specs (AGENTS.md Rule 3).
 
-### Write Contract
-| Agent | When | Condition |
-|-------|------|-----------|
-| `spec-analyst` | After Phase 6 | Only when the spec introduced a decision with repo-wide or cross-feature scope |
-| `spec-analyst-quick` | **Never** | Quick fixes do not generate architectural precedent |
+`spec-analyst` writes a decision entry after Phase 6 only if the spec introduces a repo-wide or cross-feature decision. `spec-analyst-quick` never writes decisions.

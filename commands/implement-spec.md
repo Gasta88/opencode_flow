@@ -56,11 +56,8 @@ implementer will read it automatically.
 
 ## Step 3 — Delegate
 
-Invoke `@spec-implementer` with this exact task:
-
-> Implement issue **$ARGUMENTS** from `specs/issue-$ARGUMENTS-spec.md`.
-> Track progress in `specs/issue-$ARGUMENTS-progress.md`.
-> Follow the spec-driven-workflow skill exactly.
+Invoke `@spec-implementer` with:
+> Implement issue **$ARGUMENTS** from `specs/issue-$ARGUMENTS-spec.md`. Track progress. Follow the skill exactly.
 
 ## Step 4 — Report
 

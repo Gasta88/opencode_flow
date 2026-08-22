@@ -37,35 +37,14 @@ You read evidence and return a binary verdict.
 You will receive:
 1. The spec file path (e.g. `specs/issue-FEAT-123-spec.md`)
 2. The progress file path (e.g. `specs/issue-FEAT-123-progress.md`)
-3. The test command(s) to run, as recorded in the spec's Phase 5 (Test Strategy)
-   under `### Test Command`. If no test command is recorded, you must attempt
-   to discover it from the project structure (look for pytest.ini, package.json,
-   Cargo.toml, go.mod, etc.). If no test command can be determined, treat the
-   item as UNVERIFIED.
+3. The test command from the spec's Phase 5 (`### Test Command`), if recorded.
 
 ## Your task
 
-1. Read `specs/issue-{KEY}-spec.md`. Locate the `## Definition of Done` section.
-   Extract every checkbox item.
-
-2. Read `specs/issue-{KEY}-progress.md`. Locate `## Implementation Progress`.
-   Check which sub-tasks are marked complete.
-
-2.5. Re-run the test command(s) using the bash tool if a test command is available.
-    - If the spec provides a test command under `### Test Command`, run it exactly.
-    - If no test command is recorded, attempt to discover one from project structure
-      (pytest.ini, package.json, Cargo.toml, go.mod, etc.).
-    - If no test command can be determined, treat all test-related DoD items as UNVERIFIED.
-    - If the re-run fails, mark the item FAIL with a brief error note.
-
-3. For each DoD item, determine if it is satisfied based solely on:
-   - Checkboxes in progress.md
-   - Test output recorded in progress.md
-   - File existence you can verify with read/grep/glob
-   - Your independent test re-run results from Step 2.5
-
-   Do NOT infer. Do NOT assume. If you cannot verify it from the sources above,
-   mark it UNVERIFIED (counts as failing).
+1. Read the spec. Extract every checkbox from `## Definition of Done`.
+2. Read progress.md. Check which sub-tasks are complete.
+3. Re-run tests: use the spec's test command if recorded, or discover one from project structure (`pytest.ini`, `package.json`, `Cargo.toml`, `go.mod`). If none found, treat test-related DoD items as UNVERIFIED. On failure, mark FAIL.
+4. For each DoD item, determine satisfaction based solely on: progress.md checkboxes, recorded test output, file existence (read/grep/glob), and your test re-run results. Do NOT infer. Do NOT assume. If unverifiable, mark UNVERIFIED (counts as failing).
 
 ## Output format
 
@@ -81,8 +60,14 @@ If any item fails or is unverified:
 ```
 FAIL
 Unsatisfied items:
-- <item>: <reason it failed or is unverified>
-- <item>: <reason>
+- [<critical | non-critical>] <item>: <reason it failed or is unverified>
+- [<critical | non-critical>] <item>: <reason>
 ```
+
+Severity definitions:
+- **critical**: Core functionality not implemented, a spec requirement is
+  unmet, or a security/data-integrity item is unsatisfied.
+- **non-critical**: Edge cases, documentation gaps, logging, naming conventions,
+  or test coverage for non-core paths.
 
 No preamble. No commentary. No suggestions. Binary output only.

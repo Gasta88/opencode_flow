@@ -46,31 +46,11 @@ Stop here.
 
 ## Step 2 — Resolve documentation URLs
 
-For each package, determine the canonical documentation URL using this priority:
-
-1. Official docs site (e.g. `docs.getdbt.com`, `docs.pydantic.dev`)
-2. If no dedicated docs site: the package's GitHub README
-   (`https://github.com/{org}/{repo}#readme`)
-3. PyPI project page as a last resort (`https://pypi.org/project/{name}/`)
-
-Do not guess URLs. If you cannot determine a reliable URL for a package, mark
-it as UNRESOLVED and skip the fetch.
+For each package, determine the docs URL: official docs site > GitHub README > PyPI page. Do not guess URLs — mark UNRESOLVED if uncertain.
 
 ## Step 3 — Fetch and summarise
 
-For each RESOLVED package, fetch the documentation URL.
-Extract only what is relevant to the purpose stated in the spec's dependency
-table. Do not summarise the entire library.
-
-For each package, produce a block of **maximum 30 lines**:
-- Current version (if shown on the page)
-- The specific API surface relevant to this spec (function signatures,
-  config keys, class names)
-- Any deprecations or breaking changes visible on the page
-- The source URL
-
-Limit total fetches to **5 packages**. If the spec lists more than 5, fetch
-the first 5 by order of appearance in the table and note the rest as SKIPPED.
+For each RESOLVED package, fetch docs. Extract only what's relevant to the spec's stated purpose. Produce **max 30 lines** per package: current version, relevant API surface (signatures, config keys, class names), deprecations/breaking changes, source URL. Limit to **5 packages** (note the rest as SKIPPED).
 
 ## Step 4 — Write extdocs file
 
@@ -98,11 +78,7 @@ Source: {url}
 
 ## Hard constraints
 
-- Maximum 30 lines per package block.
-- Do not reproduce large chunks of documentation verbatim — summarise the
-  API surface relevant to this spec's stated purpose.
-- Do not fetch URLs that are not documentation sites (no npm registry pages
-  that contain no API docs, no blog posts, no Stack Overflow).
-- If a fetch returns an error or redirect loop, mark the package UNRESOLVED
-  in the Not Fetched table.
-- extdocs.md is a working artefact. It must never be committed.
+- Max 30 lines per package. Summarise relevant API only — no verbatim chunks.
+- Fetch docs sites only (no npm registry, blogs, Stack Overflow).
+- On fetch error/redirect, mark UNRESOLVED.
+- Never commit extdocs.md.

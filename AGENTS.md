@@ -1,8 +1,6 @@
 # AGENTS.md — Spec-Driven Workflow Baseline Rules
 
-These rules apply to all agents operating within this repository. They establish
-the baseline expectations for how work is conducted using the `spec-driven-workflow`
-skill. Skills layer on top of these rules; they do not replace them.
+These rules apply to all agents in this repository. Skills layer on top; they do not replace these rules.
 
 ## Rule 1 — Spec-First Changes
 
@@ -12,10 +10,7 @@ No code is written without a spec. Every change begins as a light spec file in
 The only exception is `--quick` mode for trivial bugs and typos, which still
 produces a compact spec.
 
-Light spec files can be created manually, or sourced directly from a GitHub
-issue by passing a bare issue number to `/brainstorm`, `/analyze-issue`, or
-`/letsgo` (e.g., `/brainstorm 123`). A purely numeric first argument is always
-interpreted as a GitHub issue reference.
+Light spec files can be created manually or sourced from a GitHub issue by passing a bare number to `/brainstorm`, `/analyze-issue`, or `/letsgo`. A purely numeric first argument is always a GitHub issue reference.
 
 ## Rule 2 — Skill Loading
 
@@ -54,11 +49,7 @@ working or log the blocker in `progress.md`.
 
 ## Rule 7 — Evidence is the gate
 
-A progress checkbox without an `Evidence:` line is not done. Every checked box
-in `issue-{KEY}-progress.md` must carry an `Evidence:` sub-line documenting
-what was done and what the result was (test command + output, run-log excerpt,
-or an explicit note that verification was not possible). A checked box with
-no `Evidence:` line counts as unchecked.
+A progress checkbox without an `Evidence:` line is not done. Every checked box must carry an `Evidence:` sub-line: test command + output, run-log excerpt, or a note that verification was not possible. A checked box with no `Evidence:` line counts as unchecked.
 
 ## Rule 8 — Decide, don't guess
 

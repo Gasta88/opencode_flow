@@ -19,113 +19,30 @@ If a second token is present, treat it as a brief topic seed.
 
 ### GitHub issue detection
 
-If the first token of `$ARGUMENTS` matches `^[0-9]+$`, treat it as a GitHub
-issue number.
+If the first token matches `^[0-9]+$`, set **ISSUE_NUMBER** = first token, **KEY** = ISSUE_NUMBER. Run `gh issue view <ISSUE_NUMBER> --json number,title,body,url,state`. If it fails, stop with `❌ Could not fetch GitHub issue #<ISSUE_NUMBER>. Run \`gh auth login\`.`. If `state` is `CLOSED`, warn and continue.
 
-**Detection:**
-- Set **ISSUE_NUMBER** = first token.
-- Set **KEY** = ISSUE_NUMBER (as a string).
-
-**Fetch:**
-Run:
-```bash
-gh issue view <ISSUE_NUMBER> --json number,title,body,url,state
-```
-- If `gh` is not authenticated or the call fails, stop and print:
-```
-❌ Could not fetch GitHub issue #<ISSUE_NUMBER>. Run `gh auth login` or verify the issue exists.
-```
-- If `state` is `CLOSED`, print a non-blocking warning and continue:
-```
-⚠️  GitHub issue #<ISSUE_NUMBER> is closed. Proceeding anyway.
-```
-
-**Check for existing light spec:**
-- If `specs/{KEY}.md` already exists: read it and offer the user the existing
-  Refine/Replace/Abort prompt unchanged (an existing local file always wins;
-  the GitHub fetch is not used to silently overwrite manual work).
-- If `specs/{KEY}.md` does not exist: print:
-```
-Found GitHub issue #{ISSUE_NUMBER}: "{title}"
-How would you like to proceed?
-  [R] Refine interactively — walk through Problem/Why now/Outcome/etc. using the issue as a starting point
-  [U] Use as-is — write the issue content directly as the light spec, skip ideation
-```
-  - On **[R] Refine**: proceed to Step 1. Seed every section's "recommended
-    answer" using the fetched issue title + body instead of just KEY/topic-seed.
-    Append a `## Source` section to the final light spec noting the GitHub
-    issue URL.
-  - On **[U] Use as-is**: skip Step 1 entirely. Write `specs/{KEY}.md`:
-```markdown
-# {KEY}
-
-<!-- Source: GitHub Issue #{KEY} — {url} -->
-
-## Title
-{issue title}
-
-## Body
-{issue body, verbatim}
-
-## Source
-- GitHub Issue: {url}
-```
-  Then proceed to Step 3.
+- If `specs/{KEY}.md` exists: offer Refine/Replace/Abort (existing file wins).
+- If not: offer `[R] Refine interactively` or `[U] Use as-is`. On R, proceed to Step 1, seeding from the issue. On U, skip Step 1 and write `specs/{KEY}.md` with the issue title/body + `## Source` noting the URL.
 
 ### Non-numeric KEY
 
-If the first token does NOT match `^[0-9]+$`, proceed with the existing behavior:
-
-Check if `specs/{KEY}.md` already exists.
-
-- If it exists: read it and offer the user:
-  ```
-  A light spec file already exists at specs/{KEY}.md.
-  How would you like to proceed?
-    [R] Refine the existing brief
-    [P] Replace it with a new one
-    [A] Abort
-  ```
-  On Refine: use the existing content as a starting point.
-  On Replace: discard the old content and start fresh.
-  On Abort: stop.
-
-- If it does not exist: proceed to Step 1.
+Check if `specs/{KEY}.md` exists. If so, offer Refine/Replace/Abort. Otherwise proceed to Step 1.
 
 ---
 
 ## Step 1 — Explore the problem
 
-Work through these sections with the user. For each section, **carry a
-recommended answer** — do not ask open-ended questions without first offering
-a concrete suggestion. Push back on vague answers.
+Work through these sections with the user. For each, **carry a recommended answer** based on KEY and any topic seed (or the fetched issue body if from GitHub). Do not ask open-ended questions without first offering a concrete suggestion. Push back on vague answers.
 
-### Problem
-What is broken, missing, or desired? (Recommend a one-sentence framing based
-on the KEY and any topic seed.)
-
-### Why now
-What makes this urgent or timely? (Recommend a rationale — e.g. a recent
-incident, a new dependency, a user complaint.)
-
-### Outcome
-What does success look like? (Recommend a measurable outcome.)
-
-### Constraints
-What must not change? What are the hard boundaries? (Recommend likely
-constraints based on the repo structure.)
-
-### Out of scope
-What is explicitly NOT part of this work? (Recommend at least one exclusion
-to prevent scope creep.)
-
-### Open questions
-What is still unknown? (Recommend questions the user should answer before
-implementation.)
-
-### Approach sketch
-What is a plausible technical direction? (Recommend one approach with a brief
-rationale and at least one alternative to consider.)
+| Section | Prompt |
+|---------|--------|
+| Problem | What is broken, missing, or desired? |
+| Why now | What makes this urgent or timely? |
+| Outcome | What does success look like? (measurable) |
+| Constraints | What must not change? |
+| Out of scope | What is explicitly NOT part of this work? |
+| Open questions | What is still unknown? |
+| Approach sketch | Plausible technical direction + one alternative |
 
 ---
 

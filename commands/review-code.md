@@ -17,30 +17,16 @@ Run:
 ```bash
 BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
 [ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
-
-# Committed changes vs main
-COMMITTED_DIFF=$(git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD 2>/dev/null || true)
-
-# Staged but uncommitted changes
-STAGED_DIFF=$(git diff --cached HEAD 2>/dev/null || true)
-
-# Unstaged working tree changes
-UNSTAGED_DIFF=$(git diff HEAD 2>/dev/null || true)
-
-# Combined diff for review
-FULL_DIFF="${COMMITTED_DIFF}
-${STAGED_DIFF}
-${UNSTAGED_DIFF}"
+FULL_DIFF="$(git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD 2>/dev/null || true)
+$(git diff --cached HEAD 2>/dev/null || true)
+$(git diff HEAD 2>/dev/null || true)"
 ```
 and:
 ```bash
 git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
 ```
 
-If `FULL_DIFF` is empty, stop and print:
-```
-✅ No changes detected vs $BASE_BRANCH. Nothing to review.
-```
+If `FULL_DIFF` is empty, stop and print: `✅ No changes detected vs $BASE_BRANCH. Nothing to review.`
 
 ## Step 2 — Guard against trivial diffs
 
@@ -53,35 +39,19 @@ and stop.
 
 ## Step 3 — Run the adversarial reviewer
 
-Invoke `@code-reviewer` with this exact prompt:
-
+Invoke `@code-reviewer` with:
 > Review the following git diff.
->
-> ---DIFF START---
-> <FULL_DIFF from Step 1>
-> ---DIFF END---
->
-> Recent commits for context:
-> <git log --oneline output from Step 1>
-
-Capture the full response as REVIEWER_OUTPUT.
+> ---DIFF START--- <FULL_DIFF> ---DIFF END---
+> Recent commits: <git log --oneline>
+Capture as REVIEWER_OUTPUT.
 
 ## Step 4 — Run the meta-reviewer
 
-Invoke `@code-review-filter` with this exact prompt:
-
-> Filter the following code review output.
->
-> ---REVIEWER OUTPUT START---
-> <REVIEWER_OUTPUT from Step 3>
-> ---REVIEWER OUTPUT END---
->
-> Original diff for reference:
-> ---DIFF START---
-> <FULL_DIFF from Step 1>
-> ---DIFF END---
-
-Capture the full response as FINAL_OUTPUT.
+Invoke `@code-review-filter` with:
+> Filter this review output against the original diff.
+> ---REVIEWER OUTPUT START--- <REVIEWER_OUTPUT> ---REVIEWER OUTPUT END---
+> ---DIFF START--- <FULL_DIFF> ---DIFF END---
+Capture as FINAL_OUTPUT.
 
 ## Step 5 — Fix loop
 

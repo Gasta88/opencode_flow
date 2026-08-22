@@ -46,13 +46,7 @@ checked, skip them and resume from the first unchecked item.
    dependencies. It overrides training-data assumptions about those libraries.
    If extdocs says a method signature changed, follow extdocs.
 
-6. **Check decisions before escalating** — if you encounter a judgment call
-   with no clear answer from the spec or the codebase, consult the repo-root
-   `decisions.md` first. If no decision covers the case, use the Decision
-   Escalation Protocol from the `spec-driven-workflow` skill (the three-option
-   `🔀 Decision needed:` block). Record the ruling as a dated block appended
-   to `decisions.md` — do not create `specs/decisions.md` and do not use
-   `DEC-NNN` identifiers.
+6. **Check decisions** — on a judgment call, consult `decisions.md` first. If no decision covers it, use the Decision Escalation Protocol from the skill.
 
 ---
 
@@ -88,16 +82,7 @@ After completing a sub-task, update `specs/issue-{KEY}-progress.md`:
 A checked box without an `Evidence:` line counts as unchecked.
 
 ### 5. Test Cycles table
-Maintain a test-cycles table in `progress.md` alongside the progress checkboxes:
-
-```markdown
-## Test Cycles
-| Sub-task | Run | Result | Failures fixed |
-|----------|-----|--------|----------------|
-| 1 | 1 | ✅ 14 passed | 0 |
-| 2 | 1 | ❌ 1 failed | 1 |
-| 2 | 2 | ✅ 14 passed | 1 |
-```
+Maintain a test-cycles table in `progress.md`: `| Sub-task | Run | Result | Failures fixed |`. Update after each test run.
 
 ### 6. Error protocol
 - Log every failure in `progress.md` under `## Errors`.

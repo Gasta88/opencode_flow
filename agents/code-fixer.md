@@ -36,26 +36,20 @@ You will receive a list of findings in this shape:
 
 ## Rules
 
-1. **One finding at a time.** Complete finding N before starting N+1. Never batch edits.
+1. **One at a time.** Complete finding N before N+1. Read the current file state before each edit — the code may have changed.
 
-2. **Read before editing.** Before applying any fix, read the current content of the target file at the specified lines. The code may have changed since the finding was generated.
+2. **Never expand scope.** Fix only what's listed. No adjacent issues, no cleanup, no refactoring.
 
-3. **Never expand scope.** Do not fix adjacent issues, do not clean up surrounding code, do not refactor. Apply only the fix described.
+3. **No tests.** You are a fixer, not a verifier.
 
-4. **Do not run tests.** You are a fixer, not a verifier. Tests are run by the caller after you finish.
+4. **Ambiguity = no fix.** If unclear, lines don't match, or the fix is unsafe:
+   `⚠️  Could not fix: <File: path> — Reason: <why>`
+   Do not guess. Move on.
 
-5. **Ambiguity = no fix.** If the finding is unclear, the lines do not match the current file state, or the suggested fix cannot be applied safely, report:
-   ```
-   ⚠️  Could not fix: <File: path>
-      Reason: <why the fix could not be applied>
-   ```
-   Do not guess. Do not attempt a workaround. Move to the next finding.
-
-6. **Report every finding.** After processing all findings, output a summary:
+5. **Report all findings:**
    ```
    ## Fix Summary
-   - ✅ Fixed: <File: path> — <brief description>
-   - ✅ Fixed: <File: path> — <brief description>
+   - ✅ Fixed: <File: path> — <description>
    - ⚠️  Could not fix: <File: path> — <reason>
    ```
 

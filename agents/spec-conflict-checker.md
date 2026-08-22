@@ -94,10 +94,19 @@ consistency checks.
 If any conflict was found:
 ```
 CONFLICTS
-- <Decision | Codebase | Consistency> — <file/section reference>
+- <Decision | Codebase | Consistency> [<critical | warning | cosmetic>] — <file/section reference>
   Conflict: <one sentence, what contradicts what>
   Resolution: <narrow, concrete suggestion for the spec-analyst to apply>
 - <next conflict, same shape>
 ```
+
+Severity definitions:
+- **critical**: The spec contradicts an explicit architectural decision, references
+  a file that does not exist and is core to the implementation, or has a DoD item
+  with no plausible implementation path.
+- **warning**: A file to modify may not exist (but could be a new name), or an
+  acceptance criterion is only partially supported by the technical approach.
+- **cosmetic**: Naming suggestions, section ordering, minor phrasing that does
+  not affect implementation correctness.
 
 No preamble. No commentary outside the two formats above. Binary output only.

@@ -15,18 +15,8 @@ If the working tree is clean (no output), skip to Step 2.
 
 1. Print the full list of changed files to the user.
 
-2. Scan the file list for common risk patterns before proposing anything:
-   `.env`, `.env.*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `.DS_Store`
-   (belt-and-suspenders even though `.gitignore` should already catch these — a
-   file already tracked before being gitignored won't be caught by `.gitignore`
-   alone).
-
-   If any risk-pattern file appears in the changed-files list, stop and print:
-   ```
-   ⚠️  <file> matches a sensitive-file pattern and is about to be committed.
-      Remove it from the working tree or add it to .gitignore before
-      re-running /create-pr.
-   ```
+2. Scan for risk patterns: `.env`, `.env.*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `.DS_Store`. If found, stop with:
+   `⚠️  <file> matches a sensitive-file pattern. Remove it or add to .gitignore before re-running /create-pr.`
 
 3. If no risk patterns are found, generate the commit message from the diff.
    Print the proposed commit message and the file list together, and ask

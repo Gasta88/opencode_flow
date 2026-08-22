@@ -1,6 +1,6 @@
 ---
 description: Run the full pipeline end-to-end — analyze, auto-resolve spec conflicts, implement, adversarially review, remediate, and open a PR.
-argument-hint: <path-to-light-spec> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N]
+argument-hint: <path-to-light-spec> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--risk-budget N]
 agent: build
 model: opencode/qwen3.6-plus
 ---
@@ -27,6 +27,8 @@ Extract:
 - **MAX_SPEC_TURNS**: the integer after `--max-spec-turns` if present, else `3`
 - **MAX_IMPL_PASSES**: the integer after `--max-impl-passes` if present, else `3`
 - **MAX_FIX_PASSES**: the integer after `--max-fix-passes` if present, else `3`
+- **AUTO_COMMIT**: `true` if `--auto-commit` appears anywhere in `$ARGUMENTS`, else `false`
+- **RISK_BUDGET**: the integer after `--risk-budget` if present, else `0` (0 = no auto-continue on residual findings)
 
 ## Step 0.5 — GitHub issue detection & materialize
 
@@ -77,40 +79,50 @@ Verify FILE_PATH exists and is readable. If not, stop and print:
 ❌ File not found: <FILE_PATH>
 ```
 
-Print a short banner so the user can see the whole run's parameters up front:
+Print banner:
 ```
-🚀 /letsgo issue-ISSUE_KEY (quick=QUICK_MODE, spec-turns=MAX_SPEC_TURNS, impl-passes=MAX_IMPL_PASSES, fix-passes=MAX_FIX_PASSES)
+🚀 /letsgo issue-ISSUE_KEY | quick=QUICK_MODE spec-turns=MAX_SPEC_TURNS impl-passes=MAX_IMPL_PASSES fix-passes=MAX_FIX_PASSES auto-commit=AUTO_COMMIT risk-budget=RISK_BUDGET
 ```
+
+### Step 0.25 — Trivial-change detection
+
+Read the light spec file at FILE_PATH. If the `## Title` or `## Body` contains
+any of these keywords (case-insensitive): `typo`, `rename`, `reorder`,
+`bump version`, `update version`, `whitespace`, `format`, `trailing`,
+`remove unused`, `fix typo`,
+AND the body describes a single-file or single-line change, set
+TRIVIAL_MODE = `true`. Otherwise TRIVIAL_MODE = `false`.
+
+If TRIVIAL_MODE is `true` and QUICK_MODE is `false`, print:
+```
+ℹ️  Trivial change detected. Skipping spec review gate.
+```
+and set SKIP_SPEC_REVIEW = `true`. This does NOT skip spec generation (Step 1)
+— it only skips Steps 2–3 (conflict checks and human escalation).
 
 ---
 
 ## Step 1 — Analyze issue
 
-If QUICK_MODE is `true`, invoke `@spec-analyst-quick` with this exact task:
+If QUICK_MODE is `true`, invoke `@spec-analyst-quick` with:
+> Generate a fast-path spec for issue **ISSUE_KEY** from `FILE_PATH`. Store outputs under `specs/`. Follow the spec-driven-workflow skill exactly.
 
-> Generate a fast-path spec for issue **ISSUE_KEY**, reading the light spec file
-> at `FILE_PATH`. Store all output files under `specs/`.
-> Follow the spec-driven-workflow skill exactly.
-
-If QUICK_MODE is `false`, invoke `@spec-analyst` with this exact task:
-
-> Generate a full 6-phase implementation spec for issue **ISSUE_KEY**, reading
-> the light spec file at `FILE_PATH`. Store all output files under `specs/`.
-> Follow the spec-driven-workflow skill exactly.
+If QUICK_MODE is `false`, invoke `@spec-analyst` with:
+> Generate a full 6-phase spec for issue **ISSUE_KEY** from `FILE_PATH`. Store outputs under `specs/`. Follow the spec-driven-workflow skill exactly.
 
 After the subagent completes, print:
 ```
 ✅ Spec ready: specs/issue-ISSUE_KEY-{findings,progress,spec}.md
 ```
 
-If QUICK_MODE is `true`, skip directly to **Step 4**. Quick specs skip the
-review gate entirely, matching `/review-spec`'s existing quick-mode behaviour.
+If QUICK_MODE is `true` or SKIP_SPEC_REVIEW is `true`, skip directly to
+**Step 4**. Quick specs and trivial changes skip the review gate entirely.
 
 ---
 
 ## Step 2 — Automated spec conflict resolution (full mode only)
 
-Initialize AUTO_TURN = 1, VERDICT = "CONFLICTS".
+Initialize AUTO_TURN = 1, VERDICT = "CONFLICTS", MAX_SEVERITY = "none".
 
 Repeat while VERDICT == "CONFLICTS" and AUTO_TURN <= MAX_SPEC_TURNS:
 
@@ -121,8 +133,12 @@ Invoke `@spec-conflict-checker` with:
 > Check issue **ISSUE_KEY** for conflicts.
 > Spec: `specs/issue-ISSUE_KEY-spec.md`
 
-Capture the response as CHECK_OUTPUT. Set VERDICT = "CLEAR" if it starts with
-`CLEAR`, else `"CONFLICTS"`.
+Capture the response as CHECK_OUTPUT. Parse the output:
+- If it starts with `CLEAR`, set VERDICT = "CLEAR".
+- If it starts with `CONFLICTS`, set VERDICT = "CONFLICTS" and extract the
+  highest severity among all listed conflicts. Severity levels are
+  `critical` > `warning` > `cosmetic`. Set MAX_SEVERITY to the highest
+  found. If severity is not tagged, default to `warning`.
 
 ### 2b — Log the turn
 
@@ -154,26 +170,46 @@ If VERDICT == "CLEAR", print:
 ```
 and proceed to **Step 4**.
 
-If VERDICT == "CONFLICTS" after MAX_SPEC_TURNS turns, proceed to **Step 3**.
+If VERDICT == "CONFLICTS" after MAX_SPEC_TURNS turns:
+- If MAX_SEVERITY == "cosmetic", print:
+```
+ℹ️  Spec for ISSUE_KEY has only cosmetic conflicts after MAX_SPEC_TURNS turns.
+    Auto-approving and proceeding.
+```
+  Append to `specs/issue-ISSUE_KEY-progress.md`:
+```markdown
+## Automated Spec Review — Auto-approved
+- [x] Auto-approved (cosmetic-only conflicts after MAX_SPEC_TURNS turns)
+```
+  Proceed to **Step 4**.
+- Otherwise (MAX_SEVERITY is `critical` or `warning`), proceed to **Step 3**.
 
 ---
 
 ## Step 3 — Human escalation
 
-Only reached if automated resolution did not clear within budget. Print:
+Only reached if automated resolution did not clear within budget AND
+MAX_SEVERITY is `critical` or `warning`. Print:
 ```
 ⚠️  Spec for ISSUE_KEY still has open conflicts after MAX_SPEC_TURNS automated turns.
     Escalating to human review.
 ```
 
-Present the spec to the user exactly as `/review-spec` does:
+### 3.0 — decisions.md fallback
 
-1. Read `specs/issue-ISSUE_KEY-spec.md` in full and present it section by
-   section (Requirements, Technical Specification, Implementation Plan, Test
-   Strategy, Definition of Done).
-2. Show the final CHECK_OUTPUT (the outstanding conflicts) alongside the spec
-   so the user can see exactly what automation could not resolve.
-3. Ask the user:
+Before presenting to the user, check if `decisions.md` exists. For each conflict of type `Decision`, check if a matching decision covers the conflicted file/subsystem. If one exists and unambiguously resolves the conflict, apply it:
+
+1. Invoke `@spec-analyst` with:
+> Apply the existing decision from `decisions.md` to resolve the conflict in the spec for issue **ISSUE_KEY**. Existing spec: `specs/issue-ISSUE_KEY-spec.md`.
+> Conflict: <specific conflict from CHECK_OUTPUT>
+> Applicable decision: <paste matching entry>
+> Update only the conflicting section.
+
+2. Re-invoke `@spec-conflict-checker`. If "CLEAR", print `✅ Spec for ISSUE_KEY resolved via decisions.md.` and proceed to **Step 4**.
+
+If no decision covers the conflict or re-check still returns CONFLICTS, proceed to the full human review below.
+
+Present the spec as `/review-spec` does: read `specs/issue-ISSUE_KEY-spec.md` in full, show CHECK_OUTPUT (outstanding conflicts), then ask:
 ```
 How would you like to proceed?
   [A] Approve as-is
@@ -227,10 +263,7 @@ If it returns `NO_EXTERNAL_DEPS`, continue. Otherwise
 ### If QUICK_MODE is `true`
 
 Invoke `@spec-implementer` with:
-
-> Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`.
-> Track progress in `specs/issue-ISSUE_KEY-progress.md`.
-> Follow the spec-driven-workflow skill exactly.
+> Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`. Track progress. Follow the skill exactly.
 
 Print `✅ Implementation complete for ISSUE_KEY.` and proceed to **Step 5b**.
 
@@ -243,18 +276,10 @@ Repeat while DOD_VERDICT == "FAIL" and IMPL_PASS <= MAX_IMPL_PASSES:
 **5a — Implement pass**
 
 If IMPL_PASS == 1, invoke `@spec-implementer` with:
-
-> Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`.
-> Track progress in `specs/issue-ISSUE_KEY-progress.md`.
-> Follow the spec-driven-workflow skill exactly.
+> Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`. Track progress. Follow the skill exactly.
 
 If IMPL_PASS > 1, invoke `@spec-implementer` with:
-
-> Resume implementation of **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`.
-> The previous pass failed the DoD evaluation. Unsatisfied items:
-> <FAIL_REASON from previous evaluator output>
-> Address only the failing items. Do not re-implement what is already passing.
-> Track all changes in `specs/issue-ISSUE_KEY-progress.md`.
+> Resume **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`. Previous DoD failures: <FAIL_REASON>. Address only failing items. Track progress.
 
 **5b — Evaluate**
 
@@ -286,19 +311,24 @@ If DOD_VERDICT == "PASS", print:
 ```
 and proceed to **Step 5b** (test gate).
 
-If DOD_VERDICT == "FAIL" after MAX_IMPL_PASSES passes, stop and ask the user:
-```
-⚠️  ISSUE_KEY hit the implementation pass budget (MAX_IMPL_PASSES) without
-    satisfying all DoD items. Remaining failures:
-FAIL_REASON
+If DOD_VERDICT == "FAIL" after MAX_IMPL_PASSES passes, classify failures: **critical** (core functionality, security, data integrity) vs **non-critical** (edge cases, docs, naming, non-core gaps). Count CRITICAL_COUNT.
 
-How would you like to proceed?
-  [C] Continue to test gate & code review anyway
-  [S] Stop here — I'll finish this manually
+If CRITICAL_COUNT == 0, print `ℹ️  ISSUE_KEY impl budget exhausted but only non-critical DoD items remain. Auto-continuing.`, append to progress.md:
+```markdown
+## DoD Budget Exhausted — Auto-continue
+- Non-critical items remaining: <list summaries>
 ```
-If the user chooses Stop, print `⚠️  Stopping /letsgo. See specs/issue-ISSUE_KEY-progress.md.`
-and end the pipeline. If Continue, proceed to **Step 5b** noting the unmet DoD
-items in the final report.
+Set DOD_CONTINUED = `true` and proceed to **Step 5b**.
+
+If CRITICAL_COUNT > 0, stop and ask:
+```
+⚠️  ISSUE_KEY hit impl pass budget (MAX_IMPL_PASSES) with critical DoD failures:
+<list critical FAIL_REASON lines>
+
+[C] Continue to test gate & code review anyway
+[S] Stop here
+```
+If Stop, print `⚠️  Stopping /letsgo.` and end. If Continue, set DOD_CONTINUED = `true` and proceed to **Step 5b**.
 
 ---
 
@@ -310,46 +340,21 @@ Look up the test command in this order (first match wins):
 2. **README.md** — same headings
 3. **Makefile** — look for a `test:` target
 
-If none of these yield a command, fall back to heuristics:
-- `pytest` / `pytest tests/` if `pytest` is in the project
-- `npm test` if `package.json` exists
-- `go test ./...` if `go.mod` exists
-- `cargo test` if `Cargo.toml` exists
+If none of these yield a command, fall back to heuristics: `pytest tests/`, `npm test`, `go test ./...`, or `cargo test` based on project files.
 
-If no test command can be found, **skip with a printed note**:
-```
-ℹ️  No test command found in AGENTS.md, README.md, or Makefile, and no heuristic matched. Skipping test gate.
-```
-Set TEST_RESULT = "skipped" and TEST_SOURCE = "not found" and proceed to **Step 6**.
+If no test command found, print `ℹ️  No test command found. Skipping test gate.`, set TEST_RESULT = "skipped", TEST_SOURCE = "not found", proceed to **Step 6**.
 
-Otherwise, record TEST_SOURCE = `<file where the command was found>` and run the test command.
+Otherwise, record TEST_SOURCE and run tests.
 
 ### If tests pass
-
-Print `✅ Tests passed (source: TEST_SOURCE).`
-Set TEST_RESULT = "passed" and proceed to **Step 6**.
+Print `✅ Tests passed (source: TEST_SOURCE).` Set TEST_RESULT = "passed", proceed to **Step 6**.
 
 ### If tests fail
+Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test output; fall back to `@spec-implementer` if spec context needed. Re-run tests after each fix.
 
-Run a bounded fix loop (up to MAX_FIX_PASSES passes):
+If tests pass within budget, print `✅ Tests passed after N fix pass(es) (source: TEST_SOURCE).` Set TEST_RESULT = "passed-after-fix", proceed to **Step 6**.
 
-For each fix pass, invoke `@code-fixer` with the test output and the list of
-failing tests. If a fix requires spec context (e.g. the failure is about
-missing functionality the spec describes), fall back to `@spec-implementer`
-instead. After each fix, re-run the test command.
-
-If tests pass within budget, print:
-```
-✅ Tests passed after N fix pass(es) (source: TEST_SOURCE).
-```
-Set TEST_RESULT = "passed-after-fix" and proceed to **Step 6**.
-
-If tests still fail after MAX_FIX_PASSES, print:
-```
-⚠️  Tests still failing after MAX_FIX_PASSES fix passes (source: TEST_SOURCE).
-    Continuing to code review — residual test failures will be noted in the final report.
-```
-Set TEST_RESULT = "failed" and proceed to **Step 6**.
+If tests still fail, print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Continuing to code review.` Set TEST_RESULT = "failed", proceed to **Step 6**.
 
 ---
 
@@ -403,20 +408,10 @@ FINAL_OUTPUT
 
 If ISSUES_REMAIN and FIX_PASS < MAX_FIX_PASSES, invoke `@code-fixer` with:
 
-> Address the following code review findings for issue **ISSUE_KEY**.
-> Findings:
-> FINAL_OUTPUT
-> Fix only what is listed. Read the current file state before editing.
+> Address review findings for **ISSUE_KEY**: FINAL_OUTPUT. Fix only what's listed. Read current state first.
 
-If a finding requires spec context (e.g. the fix needs to understand the
-spec's intended behavior), fall back to `@spec-implementer` with:
-
-> Address the following code review findings for issue **ISSUE_KEY**.
-> Spec: `specs/issue-ISSUE_KEY-spec.md`
-> Findings:
-> FINAL_OUTPUT
-> Fix only what is listed. Re-check your changes against the spec before
-> considering a finding resolved. Track changes in `specs/issue-ISSUE_KEY-progress.md`.
+If spec context needed, fall back to `@spec-implementer` with:
+> Address review findings for **ISSUE_KEY**. Spec: `specs/issue-ISSUE_KEY-spec.md`. Findings: FINAL_OUTPUT. Re-check against spec before resolving. Track progress.
 
 Re-collect the diff (same commands as Step 6) before looping back to 7a, since
 the fix pass changed it.
@@ -431,18 +426,24 @@ If ISSUES_REMAIN == false, print:
 ```
 and proceed to **Step 8**.
 
-If ISSUES_REMAIN == true after MAX_FIX_PASSES passes, stop and ask the user:
+If ISSUES_REMAIN == true after MAX_FIX_PASSES passes, count findings by severity: CRITICAL_FINDINGS, WARNING_FINDINGS, NITPICK_FINDINGS.
+
+If RISK_BUDGET > 0 and CRITICAL_FINDINGS == 0 and (WARNING_FINDINGS + NITPICK_FINDINGS) <= RISK_BUDGET, print `ℹ️  ISSUE_KEY code review within risk budget. Auto-continuing.`, append to progress.md:
+```markdown
+## Code Review — Auto-continue within risk budget
+- Residual findings: WARNING_FINDINGS warning(s), NITPICK_FINDINGS nitpick(s)
 ```
-⚠️  ISSUE_KEY still has flagged code review findings after MAX_FIX_PASSES passes:
+Set REVIEW_CONTINUED = `true` and proceed to **Step 8**.
+
+Otherwise, stop and ask:
+```
+⚠️  ISSUE_KEY still has review findings after MAX_FIX_PASSES passes:
 FINAL_OUTPUT
 
-How would you like to proceed?
-  [C] Continue to PR creation anyway
-  [S] Stop here — I'll finish this manually
+[C] Continue to PR creation anyway
+[S] Stop here
 ```
-If Stop, print `⚠️  Stopping /letsgo. See specs/issue-ISSUE_KEY-progress.md.`
-and end the pipeline. If Continue, proceed to **Step 8** noting the residual
-findings in the final report.
+If Stop, print `⚠️  Stopping /letsgo.` and end. If Continue, set REVIEW_CONTINUED = `true` and proceed to **Step 8**.
 
 ---
 
@@ -472,6 +473,17 @@ git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
 git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
 ```
 
+### 8b.5 — Auto-create branch if on default branch
+
+If the current branch equals BASE_BRANCH (i.e. still on `main`/`master`):
+```bash
+FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
+git checkout -b $FEATURE_BRANCH
+git push -u origin $FEATURE_BRANCH
+```
+Print `✅ Created branch $FEATURE_BRANCH.` and re-run the commands from 8b
+to get the updated branch name.
+
 ### 8c — Review and commit changes
 
 If the working tree is clean, skip to 8d.
@@ -483,8 +495,20 @@ If the working tree is clean, skip to 8d.
 ⚠️  <file> matches a sensitive-file pattern and is about to be committed.
     Remove it from the working tree or add it to .gitignore before re-running /letsgo.
 ```
-3. Otherwise generate a commit message from the diff, print it with the file
-   list, and ask the user to confirm before running `git add -A && git commit`.
+3. If AUTO_COMMIT is `true` and no risk patterns detected:
+   - Count the total changed files and total lines changed (additions + deletions).
+   - If changed files > 50 OR total lines changed > 5000, print:
+```
+⚠️  Diff exceeds auto-commit thresholds (<N> files, <N> lines).
+    Manual confirmation required.
+```
+     Then fall through to step 4 (manual confirmation).
+   - Otherwise, generate a commit message from the diff and run
+     `git add -A && git commit -m "<message>"` without asking.
+     Print `✅ Committed automatically (--auto-commit).`
+4. If AUTO_COMMIT is `false` or thresholds exceeded: generate a commit message
+   from the diff, print it with the file list, and ask the user to confirm
+   before running `git add -A && git commit`.
 
 ### 8d — Draft the PR description
 
@@ -530,10 +554,11 @@ Print a summary of the whole run:
 ```
 🎉 /letsgo complete for ISSUE_KEY
 
-  Spec:          <auto-resolved in N turns | human-approved after escalation>
-  Implementation: <PASS in N passes | continued with unmet DoD items>
+  Spec:          <auto-resolved in N turns | human-approved after escalation | trivial-change bypass>
+  Implementation: <PASS in N passes | continued with unmet DoD items (non-critical only)>
   Test suite:    <passed | passed-after-fix | failed | skipped> (source: TEST_SOURCE)
-  Code review:   <clean in N passes | continued with residual findings>
+  Code review:   <clean in N passes | continued with residual findings (within risk budget)>
+  Branch:        <branch name>
   PR:            <URL returned by gh pr create>
 
 See specs/issue-ISSUE_KEY-progress.md for the full audit trail.
