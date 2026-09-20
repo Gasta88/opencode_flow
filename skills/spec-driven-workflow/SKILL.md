@@ -143,8 +143,53 @@ using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/d
 
 ---
 
+## Progress Tracking: Engram (Primary) + Markdown (Fallback)
+
+Agents use Engram MCP tools for progress tracking by default, falling back to
+Markdown files when Engram is unavailable.
+
+### Topic Key Convention
+
+Every `topic_key` must include the ISSUE_KEY prefix to prevent collisions:
+
+| Pattern | topic_key example | Scope |
+|---------|-------------------|-------|
+| Implementation progress | `impl/FEAT-123/progress` | project |
+| Test cycles | `impl/FEAT-123/test-cycles` | project |
+| Errors | `impl/FEAT-123/errors` | project |
+| Loop passes | `loop/FEAT-123/passes` | project |
+| Pipeline audit trail | `pipeline/FEAT-123/<stage>` | project |
+| Human review | `review/FEAT-123/human-approval` | project |
+| Cross-issue decisions | `decision/FEAT-123/<slug>` | global |
+
+### Scope Conventions
+
+- `project` (default): Issue-specific progress, test results, errors, review logs
+- `global`: Cross-issue decisions that benefit other teams or sessions
+- `personal`: User preferences or agent-specific conventions (rarely used)
+
+### Fallback Behavior
+
+If Engram MCP tools are unavailable or return an error:
+1. Log the error and continue (do not crash)
+2. Fall back to Markdown writes in `specs/issue-{KEY}-progress.md`
+3. Use the same structure (checkboxes, evidence lines, tables) as before
+
+### Markdown Files That Remain
+
+These files are NOT replaced by Engram (they need git history and reviewability):
+- `specs/issue-{KEY}-findings.md` — raw light spec data
+- `specs/issue-{KEY}-spec.md` — implementation contract
+- `specs/issue-{KEY}-progress.md` — fallback when Engram unavailable
+- `decisions.md` — git source of truth (Engram mirrors with `scope: global`)
+- `specs/issue-{KEY}-extdocs.md` — external dependency docs
+
+---
+
 ## Cross-Issue Knowledge: decisions.md
 
 `decisions.md` persists architectural rulings across issues. Read before drafting specs (AGENTS.md Rule 3).
 
 `spec-analyst` writes a decision entry after Phase 6 only if the spec introduces a repo-wide or cross-feature decision. `spec-analyst-quick` never writes decisions.
+
+When writing a decision, also call `mem_save` with `scope: global` and a `topic_key` like `decision/ISSUE_KEY/<slug>` for cross-project searchability. The file remains the git source of truth; Engram provides search and compaction resilience.

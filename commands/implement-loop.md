@@ -92,7 +92,18 @@ If VERDICT == "FAIL", capture the failure lines as FAIL_REASON.
 
 ### 3c — Log pass result
 
-Append to `specs/issue-ISSUE_KEY-progress.md`:
+Call `mem_update` with:
+- `topic_key`: "loop/ISSUE_KEY/passes"
+- `title`: "Loop Pass PASS_NUMBER — <PASS or FAIL> for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Loop pass PASS_NUMBER evaluated as <PASS or FAIL>
+  **Why**: DoD evaluation for ISSUE_KEY implementation
+  **Where**: specs/issue-ISSUE_KEY-spec.md, specs/issue-ISSUE_KEY-progress.md
+  **Learned**: <EVALUATOR_OUTPUT failure details if FAIL, omit if PASS>
+
+If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 
 ```markdown
 ## Loop Pass PASS_NUMBER — <PASS or FAIL>

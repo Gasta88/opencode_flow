@@ -69,8 +69,26 @@ reproduce → localize → reduce → fix → guard) rather than guessing. Repea
 until green. **Do not check the box while tests fail.** After 3 consecutive
 failures on the same test, escalate to the user (see Error protocol below).
 
-### 4. Update progress after every sub-task
-After completing a sub-task, update `specs/issue-{KEY}-progress.md`:
+### 4. Track progress via Engram (primary) + progress.md (fallback)
+
+After completing a sub-task, track progress using Engram MCP tools:
+
+**Primary path — Engram:**
+Call `mem_save` with:
+- `title`: "Sub-task N complete: ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `topic_key`: "impl/ISSUE_KEY/progress"
+- `content`:
+  **What**: Sub-task N completed — <brief description>
+  **Why**: Implementation plan step N for ISSUE_KEY
+  **Where**: Files modified
+  **Learned**: Any gotchas, test failures fixed, or surprises (omit if none)
+
+Also call `mem_update` to update the same topic_key with cumulative progress state.
+
+**Fallback — Markdown:**
+If Engram MCP is unavailable, update `specs/issue-{KEY}-progress.md`:
 
 ```markdown
 ## Implementation Progress
@@ -82,11 +100,16 @@ After completing a sub-task, update `specs/issue-{KEY}-progress.md`:
 A checked box without an `Evidence:` line counts as unchecked.
 
 ### 5. Test Cycles table
-Maintain a test-cycles table in `progress.md`: `| Sub-task | Run | Result | Failures fixed |`. Update after each test run.
+
+Track test cycles via Engram with `topic_key`: "impl/ISSUE_KEY/test-cycles".
+If Engram unavailable, maintain a test-cycles table in `progress.md`: `| Sub-task | Run | Result | Failures fixed |`. Update after each test run.
 
 ### 6. Error protocol
-- Log every failure in `progress.md` under `## Errors`.
-- After 2 consecutive failures on the same action: change approach using the
+
+Log every failure via Engram with `topic_key`: "impl/ISSUE_KEY/errors".
+If Engram unavailable, log in `progress.md` under `## Errors`.
+
+After 2 consecutive failures on the same action: change approach using the
   `debugging-and-error-recovery` skill.
 - Never repeat the exact same failing action.
 - After 3 consecutive failures on the same test despite following the

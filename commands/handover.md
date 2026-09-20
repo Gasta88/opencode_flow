@@ -12,7 +12,7 @@ up cold. Be specific. Vague handovers waste the next person's first hour.
 
 ## Collect technical context
 
-Run these commands and incorporate the output into the document:
+Run these commands and incorporate the output into the handover:
 
 ```bash
 BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
@@ -23,7 +23,34 @@ git status --short
 git diff --stat $(git merge-base HEAD $BASE_BRANCH)..HEAD 2>/dev/null
 ```
 
-## Document structure
+## Save handover via Engram
+
+Call `mem_session_summary` with this structure:
+
+```markdown
+## Goal
+<What was being worked on this session>
+
+## Instructions
+<User preferences or constraints discovered — skip if none>
+
+## Discoveries
+- <Technical findings, gotchas, non-obvious learnings>
+- <Include relevant git context: branch, recent commits, modified files>
+
+## Accomplished
+- [Completed items with key details]
+
+## Next Steps
+- [What remains to be done — for the next session]
+
+## Relevant Files
+- path/to/file — [what it does or what changed]
+```
+
+## Fallback: Markdown handover file
+
+If Engram MCP is unavailable, fall back to creating a Markdown file.
 
 Use this structure:
 ```markdown
@@ -56,8 +83,6 @@ Use this structure:
 Focus: $ARGUMENTS (or "general continuation")
 Skills: spec-driven-workflow
 ```
-
-## Save
 
 Create the `handovers/` directory if it doesn't exist, then write the document to:
 

@@ -70,7 +70,18 @@ Capture the user's response.
 
 If the user chooses "Approve as-is":
 
-Append to `specs/issue-ISSUE_KEY-progress.md`:
+Call `mem_update` with:
+- `topic_key`: "review/ISSUE_KEY/human-approval"
+- `title`: "Human Review — Approved for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Spec approved by user on <YYYY-MM-DD>
+  **Why**: Human review gate passed
+  **Where**: specs/issue-ISSUE_KEY-spec.md
+  **Learned**: Ready for /implement-spec or /implement-loop
+
+If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 
 ```markdown
 ## Human Review

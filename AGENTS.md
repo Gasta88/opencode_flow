@@ -58,3 +58,42 @@ the case, escalate via the three-option protocol from the `spec-driven-workflow`
 skill (`🔀 Decision needed:` with Option A / Option B / Recommended). Record
 the ruling as a dated block appended to `decisions.md`. Never invent a
 decision silently.
+
+## Rule 9 — Engram: Save Progress, Not Just Files
+
+Agents use Engram MCP tools (`mem_save`, `mem_update`, `mem_session_summary`)
+for progress tracking by default. Markdown files remain for git-tracked
+contracts (specs, decisions, commands, agents, skills).
+
+### When to call Engram tools
+
+- **After every sub-task**: `mem_save` with `topic_key: "impl/ISSUE_KEY/progress"`, `scope: project`
+- **After every loop pass**: `mem_update` with `topic_key: "loop/ISSUE_KEY/passes"`, `scope: project`
+- **On decisions**: `mem_save` with `topic_key: "decision/ISSUE_KEY/<slug>"`, `scope: global` (alongside `decisions.md` append)
+- **On session end**: `mem_session_summary` with Goal/Instructions/Discoveries/Accomplished/Next Steps/Relevant Files
+- **On errors**: `mem_save` with `topic_key: "impl/ISSUE_KEY/errors"`, `scope: project`
+
+### Fallback
+
+If Engram MCP is unavailable or returns an error, fall back to Markdown writes
+in `specs/issue-{KEY}-progress.md`. Log the error and continue — do not crash.
+
+### Scope conventions
+
+- `project` (default): Issue-specific progress, test results, errors
+- `global`: Cross-issue decisions that benefit other teams/sessions
+- `personal`: User preferences (rarely used)
+
+### Topic key convention
+
+Always include ISSUE_KEY prefix: `impl/FEAT-123/progress`, not just `progress`.
+This prevents collisions across different issues.
+
+## Rule 10 — Engram: Search Before Assuming
+
+Before working on something that might have been done before, call
+`mem_search` with keywords from the task. Past sessions may contain decisions,
+bug fixes, or patterns that save time.
+
+When the user asks to recall something, search memory first (`mem_context` for
+recent sessions, `mem_search` for keyword search) before guessing or re-deriving.

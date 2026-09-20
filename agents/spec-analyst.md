@@ -226,8 +226,22 @@ introduced any decision with repo-wide or cross-feature scope (e.g. new
 library choice, new architectural pattern, rejected alternative worth
 remembering). Apply this test: "Would another team benefit from knowing this?"
 
-If YES: append a new entry to `decisions.md` using the documented format.
+If YES:
+1. Append a new entry to `decisions.md` using the documented format (git history).
+2. Call `mem_save` with:
+   - `title`: "<short title of decision>"
+   - `type`: decision
+   - `scope`: global
+   - `topic_key`: "decision/ISSUE_KEY/<short-slug>"
+   - `content`:
+     **What**: <decision made>
+     **Why**: <rationale>
+     **Where**: Files/subsystems affected
+     **Learned**: Alternatives considered and rejected
+
 If NO: do not write anything. Not every spec produces a decision entry.
+
+If Engram MCP is unavailable, skip the `mem_save` call and write only to `decisions.md`.
 
 ---
 

@@ -142,7 +142,18 @@ Capture the response as CHECK_OUTPUT. Parse the output:
 
 ### 2b — Log the turn
 
-Append to `specs/issue-ISSUE_KEY-progress.md`:
+Call `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/automated-spec-review"
+- `title`: "Automated Spec Review — Turn AUTO_TURN for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Automated spec conflict check turn AUTO_TURN
+  **Why**: Spec conflict resolution for ISSUE_KEY
+  **Where**: specs/issue-ISSUE_KEY-spec.md
+  **Learned**: CHECK_OUTPUT
+
+If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 ```markdown
 ## Automated Spec Review — Turn AUTO_TURN
 CHECK_OUTPUT
@@ -176,7 +187,18 @@ If VERDICT == "CONFLICTS" after MAX_SPEC_TURNS turns:
 ℹ️  Spec for ISSUE_KEY has only cosmetic conflicts after MAX_SPEC_TURNS turns.
     Auto-approving and proceeding.
 ```
-  Append to `specs/issue-ISSUE_KEY-progress.md`:
+  Append via `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/automated-spec-review"
+- `title`: "Automated Spec Review — Auto-approved for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Auto-approved cosmetic conflicts after MAX_SPEC_TURNS turns
+  **Why**: Only cosmetic conflicts remained, auto-approving to proceed
+  **Where**: specs/issue-ISSUE_KEY-spec.md
+  **Learned**: Auto-approved after budget exhaustion
+
+If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 ```markdown
 ## Automated Spec Review — Auto-approved
 - [x] Auto-approved (cosmetic-only conflicts after MAX_SPEC_TURNS turns)
@@ -219,7 +241,18 @@ How would you like to proceed?
 
 ### 3a — On approval
 
-Append to `specs/issue-ISSUE_KEY-progress.md`:
+Call `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/human-review"
+- `title`: "Human Review — Approved for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Spec approved by user after MAX_SPEC_TURNS unresolved automated conflicts
+  **Why**: Human escalation from automated conflict resolution
+  **Where**: specs/issue-ISSUE_KEY-spec.md
+  **Learned**: User approved spec for ISSUE_KEY
+
+If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 ```markdown
 ## Human Review
 - [x] Approved by user on <YYYY-MM-DD> (after MAX_SPEC_TURNS unresolved automated conflicts)
@@ -295,7 +328,18 @@ FAIL_REASON.
 
 **5c — Log the pass**
 
-Append to `specs/issue-ISSUE_KEY-progress.md`:
+Call `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/impl-passes"
+- `title`: "Implementation Loop Pass IMPL_PASS — <PASS or FAIL> for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Implementation pass IMPL_PASS evaluated as <PASS or FAIL>
+  **Why**: DoD-gated implementation loop for ISSUE_KEY
+  **Where**: specs/issue-ISSUE_KEY-spec.md, specs/issue-ISSUE_KEY-progress.md
+  **Learned**: EVALUATOR_OUTPUT
+
+If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 ```markdown
 ## Loop Pass IMPL_PASS — <PASS or FAIL>
 Evaluator output:
@@ -313,7 +357,18 @@ and proceed to **Step 5b** (test gate).
 
 If DOD_VERDICT == "FAIL" after MAX_IMPL_PASSES passes, classify failures: **critical** (core functionality, security, data integrity) vs **non-critical** (edge cases, docs, naming, non-core gaps). Count CRITICAL_COUNT.
 
-If CRITICAL_COUNT == 0, print `ℹ️  ISSUE_KEY impl budget exhausted but only non-critical DoD items remain. Auto-continuing.`, append to progress.md:
+If CRITICAL_COUNT == 0, print `ℹ️  ISSUE_KEY impl budget exhausted but only non-critical DoD items remain. Auto-continuing.`, call `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/dod-budget"
+- `title`: "DoD Budget Exhausted — Auto-continue for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: DoD budget exhausted, auto-continuing with non-critical items remaining
+  **Why**: No critical failures, proceeding to test gate
+  **Where**: specs/issue-ISSUE_KEY-spec.md
+  **Learned**: Non-critical items remaining: <list summaries>
+
+If Engram MCP is unavailable, append to progress.md:
 ```markdown
 ## DoD Budget Exhausted — Auto-continue
 - Non-critical items remaining: <list summaries>
@@ -398,7 +453,18 @@ If FINAL_OUTPUT contains `0 issues flagged`, set ISSUES_REMAIN = false.
 
 **7c — Log the pass**
 
-Append to `specs/issue-ISSUE_KEY-progress.md`:
+Call `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/code-review"
+- `title`: "Code Review Pass FIX_PASS for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Code review pass FIX_PASS completed
+  **Why**: Adversarial code review for ISSUE_KEY
+  **Where**: Diff vs BASE_BRANCH
+  **Learned**: FINAL_OUTPUT
+
+If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 ```markdown
 ## Code Review Pass FIX_PASS
 FINAL_OUTPUT
@@ -428,7 +494,18 @@ and proceed to **Step 8**.
 
 If ISSUES_REMAIN == true after MAX_FIX_PASSES passes, count findings by severity: CRITICAL_FINDINGS, WARNING_FINDINGS, NITPICK_FINDINGS.
 
-If RISK_BUDGET > 0 and CRITICAL_FINDINGS == 0 and (WARNING_FINDINGS + NITPICK_FINDINGS) <= RISK_BUDGET, print `ℹ️  ISSUE_KEY code review within risk budget. Auto-continuing.`, append to progress.md:
+If RISK_BUDGET > 0 and CRITICAL_FINDINGS == 0 and (WARNING_FINDINGS + NITPICK_FINDINGS) <= RISK_BUDGET, print `ℹ️  ISSUE_KEY code review within risk budget. Auto-continuing.`, call `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/code-review"
+- `title`: "Code Review — Auto-continue within risk budget for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Code review within risk budget, auto-continuing
+  **Why**: Residual findings within acceptable risk threshold
+  **Where**: Diff vs BASE_BRANCH
+  **Learned**: Residual findings: WARNING_FINDINGS warning(s), NITPICK_FINDINGS nitpick(s)
+
+If Engram MCP is unavailable, append to progress.md:
 ```markdown
 ## Code Review — Auto-continue within risk budget
 - Residual findings: WARNING_FINDINGS warning(s), NITPICK_FINDINGS nitpick(s)
