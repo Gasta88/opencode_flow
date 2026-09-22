@@ -2,7 +2,7 @@
 name: spec-implementer
 description: Implements code changes from a spec file. Executes the Implementation Plan sub-tasks in order, runs tests before marking complete, and tracks progress in the spec's progress.md file.
 mode: subagent
-model: opencode/qwen3.6-plus
+model: opencode/qwen3.8-flash
 temperature: 0.2
 permission:
   edit: allow

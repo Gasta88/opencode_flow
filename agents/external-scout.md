@@ -6,7 +6,7 @@ description: >
   Invoked by /implement-spec and /implement-loop — do not invoke directly.
 mode: subagent
 hidden: true
-model: opencode/qwen3.5-plus
+model: opencode/qwen3.8-flash
 temperature: 0.1
 permission:
   edit: deny
