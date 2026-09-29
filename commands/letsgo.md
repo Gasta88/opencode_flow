@@ -1,6 +1,6 @@
 ---
 description: Run the full pipeline end-to-end — analyze, auto-resolve spec conflicts, implement, adversarially review, remediate, and open a PR.
-argument-hint: <path-to-light-spec> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--risk-budget N]
+argument-hint: <path-to-light-spec> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N]
 agent: build
 model: opencode/qwen3.6-plus
 ---
@@ -27,7 +27,9 @@ Extract:
 - **MAX_SPEC_TURNS**: the integer after `--max-spec-turns` if present, else `3`
 - **MAX_IMPL_PASSES**: the integer after `--max-impl-passes` if present, else `3`
 - **MAX_FIX_PASSES**: the integer after `--max-fix-passes` if present, else `3`
-- **AUTO_COMMIT**: `true` if `--auto-commit` appears anywhere in `$ARGUMENTS`, else `false`
+- **AUTO_COMMIT**: `true` by default. `false` only if `--no-auto-commit` appears
+  anywhere in `$ARGUMENTS`. (`--auto-commit` is still accepted for backwards
+  compatibility and forces `true`.)
 - **RISK_BUDGET**: the integer after `--risk-budget` if present, else `0` (0 = no auto-continue on residual findings)
 
 ## Step 0.5 — GitHub issue detection & materialize
@@ -582,8 +584,8 @@ If the working tree is clean, skip to 8d.
      Then fall through to step 4 (manual confirmation).
    - Otherwise, generate a commit message from the diff and run
      `git add -A && git commit -m "<message>"` without asking.
-     Print `✅ Committed automatically (--auto-commit).`
-4. If AUTO_COMMIT is `false` or thresholds exceeded: generate a commit message
+     Print `✅ Committed automatically (auto-commit on by default).`
+4. If AUTO_COMMIT is `false` (`--no-auto-commit`) or thresholds exceeded: generate a commit message
    from the diff, print it with the file list, and ask the user to confirm
    before running `git add -A && git commit`.
 
