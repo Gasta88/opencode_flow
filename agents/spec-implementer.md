@@ -27,6 +27,7 @@ permission:
     "pytest*": allow
     "go test*": allow
     "cargo test*": allow
+    "make *": allow
   webfetch: deny
 ---
 

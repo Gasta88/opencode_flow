@@ -1,6 +1,6 @@
 ---
 description: Run the full pipeline end-to-end — analyze, auto-resolve spec conflicts, implement, adversarially review, remediate, and open a PR.
-argument-hint: <path-to-light-spec> [--quick] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N]
+argument-hint: <path-to-light-spec> [--quick] [--headless] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N] [--strict-tests] [--no-strict-tests] [--make-ci] [--spec-confidence N]
 agent: build
 model: opencode/qwen3.6-plus
 ---
@@ -24,6 +24,7 @@ Extract:
 - **ISSUE_KEY**: the basename of FILE_PATH without the `.md` extension. If the
   derived key starts with `issue-`, strip that prefix (first occurrence only).
 - **QUICK_MODE**: `true` if `--quick` appears anywhere in `$ARGUMENTS`, else `false`
+- **HEADLESS**: `true` if `--headless` appears anywhere in `$ARGUMENTS`, else `false`
 - **MAX_SPEC_TURNS**: the integer after `--max-spec-turns` if present, else `3`
 - **MAX_IMPL_PASSES**: the integer after `--max-impl-passes` if present, else `3`
 - **MAX_FIX_PASSES**: the integer after `--max-fix-passes` if present, else `3`
@@ -31,6 +32,12 @@ Extract:
   anywhere in `$ARGUMENTS`. (`--auto-commit` is still accepted for backwards
   compatibility and forces `true`.)
 - **RISK_BUDGET**: the integer after `--risk-budget` if present, else `0` (0 = no auto-continue on residual findings)
+- **STRICT_TESTS**: `true` if `--strict-tests` appears, or if HEADLESS is `true`.
+  `false` only if `--no-strict-tests` appears anywhere.
+- **MAKE_CI**: `true` if `--make-ci` appears anywhere in `$ARGUMENTS`, else `false`
+- **SPEC_CONFIDENCE**: the float after `--spec-confidence` if present, else `0.0`
+  (0.0 = escalate all conflicts regardless of confidence; 0.8 = escalate only
+  conflicts tagged with confidence >= 0.8)
 
 ## Step 0.5 — GitHub issue detection & materialize
 
@@ -83,8 +90,26 @@ Verify FILE_PATH exists and is readable. If not, stop and print:
 
 Print banner:
 ```
-🚀 /letsgo issue-ISSUE_KEY | quick=QUICK_MODE spec-turns=MAX_SPEC_TURNS impl-passes=MAX_IMPL_PASSES fix-passes=MAX_FIX_PASSES auto-commit=AUTO_COMMIT risk-budget=RISK_BUDGET
+🚀 /letsgo issue-ISSUE_KEY | quick=QUICK_MODE headless=HEADLESS spec-turns=MAX_SPEC_TURNS impl-passes=MAX_IMPL_PASSES fix-passes=MAX_FIX_PASSES auto-commit=AUTO_COMMIT risk-budget=RISK_BUDGET strict-tests=STRICT_TESTS make-ci=MAKE_CI spec-confidence=SPEC_CONFIDENCE
 ```
+
+### Step 0.1 — Create feature branch up front
+
+Determine the base branch:
+```bash
+BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
+[ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
+```
+
+If the current branch equals BASE_BRANCH (i.e. still on `main`/`master`):
+```bash
+FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
+git checkout -b $FEATURE_BRANCH
+```
+Print `✅ Created feature branch $FEATURE_BRANCH from origin/$BASE_BRANCH.`
+
+Store BASE_BRANCH and FEATURE_BRANCH as variables for later steps.
+If already on a non-default branch, use it as-is and set FEATURE_BRANCH to the current branch name.
 
 ### Step 0.25 — Trivial-change detection
 
@@ -206,6 +231,14 @@ If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 - [x] Auto-approved (cosmetic-only conflicts after MAX_SPEC_TURNS turns)
 ```
   Proceed to **Step 4**.
+- If SPEC_CONFIDENCE > 0.0, filter the CHECK_OUTPUT conflicts by confidence.
+  Only escalate conflicts where the checker expressed confidence >= SPEC_CONFIDENCE.
+  If after filtering no conflicts remain at critical/warning severity, print:
+```
+ℹ️  Spec for ISSUE_KEY conflicts filtered out by confidence threshold (SPEC_CONFIDENCE).
+    Auto-approving and proceeding.
+```
+  Proceed to **Step 4**.
 - Otherwise (MAX_SEVERITY is `critical` or `warning`), proceed to **Step 3**.
 
 ---
@@ -213,11 +246,27 @@ If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
 ## Step 3 — Human escalation
 
 Only reached if automated resolution did not clear within budget AND
-MAX_SEVERITY is `critical` or `warning`. Print:
+MAX_SEVERITY is `critical` or `warning`.
+
+### 3-headless — Headless mode
+
+If HEADLESS is `true`, do NOT ask the user. Print:
 ```
 ⚠️  Spec for ISSUE_KEY still has open conflicts after MAX_SPEC_TURNS automated turns.
-    Escalating to human review.
+    Headless mode: stopping and marking as Blocked.
 ```
+Call `mem_update` with:
+- `topic_key`: "pipeline/ISSUE_KEY/automated-spec-review"
+- `title`: "Headless Stop — Spec Conflicts for ISSUE_KEY"
+- `type`: manual
+- `scope`: project
+- `content`:
+  **What**: Pipeline stopped in headless mode due to unresolved spec conflicts
+  **Why**: HEADLESS mode; no human available to resolve conflicts
+  **Where**: specs/issue-ISSUE_KEY-spec.md
+  **Learned**: Conflicts: CHECK_OUTPUT
+
+Stop the entire pipeline. Do not proceed to implementation, review, or PR creation.
 
 ### 3.0 — decisions.md fallback
 
@@ -377,7 +426,14 @@ If Engram MCP is unavailable, append to progress.md:
 ```
 Set DOD_CONTINUED = `true` and proceed to **Step 5b**.
 
-If CRITICAL_COUNT > 0, stop and ask:
+If CRITICAL_COUNT > 0:
+- If HEADLESS is `true`, print:
+```
+⚠️  ISSUE_KEY hit impl pass budget (MAX_IMPL_PASSES) with critical DoD failures.
+    Headless mode: stopping and marking as Blocked.
+```
+  Stop the entire pipeline.
+- Otherwise, stop and ask:
 ```
 ⚠️  ISSUE_KEY hit impl pass budget (MAX_IMPL_PASSES) with critical DoD failures:
 <list critical FAIL_REASON lines>
@@ -391,7 +447,12 @@ If Stop, print `⚠️  Stopping /letsgo.` and end. If Continue, set DOD_CONTINU
 
 ## Step 5b — Convention-based test-suite gate
 
-Look up the test command in this order (first match wins):
+If MAKE_CI is `true`, look for a `make ci` target in the Makefile.
+If found, set TEST_COMMAND = `make ci`, TEST_SOURCE = "make ci", and run it.
+If not found, print `⚠️  --make-ci specified but no 'make ci' target found. Stopping.`
+and stop the pipeline.
+
+Otherwise, look up the test command in this order (first match wins):
 
 1. **AGENTS.md** — look for a `## Test` / `## Tests` / `## Testing` heading
 2. **README.md** — same headings
@@ -411,7 +472,9 @@ Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test ou
 
 If tests pass within budget, print `✅ Tests passed after N fix pass(es) (source: TEST_SOURCE).` Set TEST_RESULT = "passed-after-fix", proceed to **Step 6**.
 
-If tests still fail, print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Continuing to code review.` Set TEST_RESULT = "failed", proceed to **Step 6**.
+If tests still fail:
+- If STRICT_TESTS is `true`, print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Strict-tests mode: stopping.` and stop the pipeline.
+- Otherwise, print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Continuing to code review.` Set TEST_RESULT = "failed", proceed to **Step 6**.
 
 ---
 
@@ -514,7 +577,14 @@ If Engram MCP is unavailable, append to progress.md:
 ```
 Set REVIEW_CONTINUED = `true` and proceed to **Step 8**.
 
-Otherwise, stop and ask:
+Otherwise:
+- If HEADLESS is `true`, print:
+```
+⚠️  ISSUE_KEY still has review findings after MAX_FIX_PASSES passes.
+    Headless mode: stopping and marking as Needs Review.
+```
+  Stop the pipeline. Do NOT open a PR.
+- Otherwise, stop and ask:
 ```
 ⚠️  ISSUE_KEY still has review findings after MAX_FIX_PASSES passes:
 FINAL_OUTPUT
@@ -523,6 +593,28 @@ FINAL_OUTPUT
 [S] Stop here
 ```
 If Stop, print `⚠️  Stopping /letsgo.` and end. If Continue, set REVIEW_CONTINUED = `true` and proceed to **Step 8**.
+
+---
+
+## Step 7.5 — Post-review test re-run
+
+If TEST_RESULT was "passed" or "passed-after-fix" from Step 5b, and code review
+made changes (ISSUES_REMAIN was true at any point), re-run the test suite to
+catch regressions introduced by code-fixer changes.
+
+Run the same TEST_COMMAND from Step 5b.
+
+If tests pass, print `✅ Post-review tests passed.` Set POST_REVIEW_TEST = "passed".
+Proceed to **Step 8**.
+
+If tests fail:
+- Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test output; re-run tests after each fix.
+- If tests pass within budget, print `✅ Post-review tests passed after N fix pass(es).` Set POST_REVIEW_TEST = "passed-after-fix", proceed to **Step 8**.
+- If STRICT_TESTS is `true` and tests still fail, print `⚠️  Post-review tests still failing. Strict-tests mode: stopping.` and stop the pipeline.
+- Otherwise, print `⚠️  Post-review tests still failing after fix passes. Continuing to PR creation (test result from Step 5b was green).` Set POST_REVIEW_TEST = "failed", proceed to **Step 8**.
+
+If TEST_RESULT was "failed" or "skipped" from Step 5b, skip this step.
+Set POST_REVIEW_TEST = "skipped".
 
 ---
 
@@ -552,16 +644,18 @@ git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
 git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
 ```
 
-### 8b.5 — Auto-create branch if on default branch
+### 8b.5 — Feature branch verification
 
-If the current branch equals BASE_BRANCH (i.e. still on `main`/`master`):
+The feature branch was created in Step 0.1. Verify we are on it:
+```bash
+CURRENT_BRANCH=$(git branch --show-current)
+```
+If CURRENT_BRANCH equals BASE_BRANCH (unexpected — should not happen), create it now:
 ```bash
 FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
 git checkout -b $FEATURE_BRANCH
-git push -u origin $FEATURE_BRANCH
 ```
-Print `✅ Created branch $FEATURE_BRANCH.` and re-run the commands from 8b
-to get the updated branch name.
+Otherwise, continue on the existing FEATURE_BRANCH.
 
 ### 8c — Review and commit changes
 
@@ -576,6 +670,7 @@ If the working tree is clean, skip to 8d.
 ```
 3. If AUTO_COMMIT is `true` and no risk patterns detected:
    - Count the total changed files and total lines changed (additions + deletions).
+     Exclude files under `specs/` from the count (spec artefacts are tracked separately).
    - If changed files > 50 OR total lines changed > 5000, print:
 ```
 ⚠️  Diff exceeds auto-commit thresholds (<N> files, <N> lines).
@@ -583,11 +678,11 @@ If the working tree is clean, skip to 8d.
 ```
      Then fall through to step 4 (manual confirmation).
    - Otherwise, generate a commit message from the diff and run
-     `git add -A && git commit -m "<message>"` without asking.
+     `git add -A -- ':!specs/' && git commit -m "<message>"` without asking.
      Print `✅ Committed automatically (auto-commit on by default).`
 4. If AUTO_COMMIT is `false` (`--no-auto-commit`) or thresholds exceeded: generate a commit message
-   from the diff, print it with the file list, and ask the user to confirm
-   before running `git add -A && git commit`.
+   from the diff, print it with the file list (excluding `specs/`), and ask the user to confirm
+   before running `git add -A -- ':!specs/' && git commit`.
 
 ### 8d — Draft the PR description
 
@@ -633,12 +728,19 @@ Print a summary of the whole run:
 ```
 🎉 /letsgo complete for ISSUE_KEY
 
-  Spec:          <auto-resolved in N turns | human-approved after escalation | trivial-change bypass>
-  Implementation: <PASS in N passes | continued with unmet DoD items (non-critical only)>
+  Spec:          <auto-resolved in N turns | human-approved after escalation | trivial-change bypass | headless-stopped: conflicts>
+  Implementation: <PASS in N passes | continued with unmet DoD items (non-critical only) | headless-stopped: DoD>
   Test suite:    <passed | passed-after-fix | failed | skipped> (source: TEST_SOURCE)
-  Code review:   <clean in N passes | continued with residual findings (within risk budget)>
+  Post-review:   <passed | passed-after-fix | failed | skipped>
+  Code review:   <clean in N passes | continued with residual findings (within risk budget) | headless-stopped: review>
   Branch:        <branch name>
   PR:            <URL returned by gh pr create>
 
 See specs/issue-ISSUE_KEY-progress.md for the full audit trail.
+```
+
+If the pipeline stopped in headless mode at any point, print:
+```
+⚠️  Pipeline stopped in headless mode. See Engram or progress.md for the blocking reason.
+    Issue remains on the board for human attention.
 ```

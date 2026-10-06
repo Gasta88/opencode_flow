@@ -15,6 +15,7 @@ permission:
     "yarn test*": allow
     "go test*": allow
     "cargo test*": allow
+    "make *": allow
     "git status*": allow
     "git diff --stat*": allow
   webfetch: deny

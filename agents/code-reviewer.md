@@ -3,7 +3,7 @@ name: code-reviewer
 description: Adversarial code reviewer. Finds bugs, logic errors, and security issues in a git diff. Primed to be critical. Used by /review-code — do not invoke directly.
 mode: subagent
 hidden: true
-model: opencode/deepseek-v4.1-flash
+model: opencode/qwen3.8-flash
 temperature: 0.2
 permission:
   edit: deny

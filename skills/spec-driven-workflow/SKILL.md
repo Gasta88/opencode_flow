@@ -92,7 +92,7 @@ Do not create `specs/decisions.md`. Do not use `DEC-NNN` identifiers. The repo-r
 | `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` |
 | `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (inline) |
 | `/handover` | `opencode/qwen3.6-plus` | — (inline) |
-| `/letsgo <path> [--quick] [...]` | `opencode/qwen3.6-plus` | all above, chained |
+| `/letsgo <path> [--quick] [--headless] [...]` | `opencode/qwen3.6-plus` | all above, chained |
 
 ---
 
@@ -130,13 +130,17 @@ Loop behaviour is enforced via:
   `spec-analyst` revises on CONFLICTS, up to `--max-spec-turns` (default 3).
   Unresolved after budget → falls through to the same human approve/request-changes/reject
   gate `/review-spec` uses, since automation cannot force-close a genuine
-  ambiguity.
+  ambiguity. Under `--headless`, unresolved conflicts stop the pipeline and mark the issue as Blocked.
 - Implementation loop: identical to `/implement-loop`'s, budget `--max-impl-passes`
   (default 3). Unresolved after budget → asks the human whether to continue or stop.
+  Under `--headless`, critical DoD failures stop the pipeline.
 - Code-review remediation loop: `code-reviewer` + `code-review-filter` produce
   findings; `code-fixer` applies them (falling back to `spec-implementer` if spec context is needed); re-review until clean or
   `--max-fix-passes` (default 3). Unresolved after budget → asks the human
-  whether to continue or stop.
+  whether to continue or stop. Under `--headless`, residual findings stop the pipeline (no PR opened).
+
+**Test gate (`/letsgo` only):** Runs after implementation, before code review.
+With `--strict-tests` (default under `--headless`), test failures after the fix budget stop the pipeline (no PR opened). Without it, failures are logged but the pipeline continues. A post-review test re-run catches regressions from code-fixer changes before PR creation.
 
 For event-driven enforcement on every tool call, implement an OpenCode plugin
 using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/docs/plugins/
