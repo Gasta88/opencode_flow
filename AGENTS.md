@@ -4,13 +4,15 @@ These rules apply to all agents in this repository. Skills layer on top; they do
 
 ## Rule 1 — Spec-First Changes
 
-No code is written without a spec. Every change begins as a light spec file in
-`specs/`, is analyzed via `/analyze-issue`, and produces a structured
-`issue-{KEY}-spec.md` before `/implement-spec` or `/implement-loop` is invoked.
-The only exception is `--quick` mode for trivial bugs and typos, which still
-produces a compact spec.
+No code is written without a spec. Every change begins as a light spec — a file
+in `specs/` or a GitHub issue — is analyzed via `/analyze-issue`, and produces a
+structured `issue-{KEY}-spec.md` before `/implement-spec` or `/implement-loop`
+is invoked. The only exception is `--quick` mode for trivial bugs and typos,
+which still produces a compact spec.
 
-Light spec files can be created manually or sourced from a GitHub issue by passing a bare number to `/brainstorm`, `/analyze-issue`, or `/letsgo`. A purely numeric first argument is always a GitHub issue reference.
+Light spec files can be created manually, or sourced from a GitHub issue by passing a bare number to `/analyze-issue` or `/letsgo`. A purely numeric first argument to those two commands is always a GitHub issue reference.
+
+At project scope, `/brainstorm <notion-url>` is the front end: it turns a Notion project brief into an aligned vision and publishes the work as light GitHub issues on a Project board. Those issues then become the light specs that `/analyze-issue <N>` and `/letsgo <N>` consume. `/brainstorm` accepts a Notion URL only — it does not take a KEY, a file path, or an issue number.
 
 ## Rule 2 — Skill Loading
 

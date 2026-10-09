@@ -12,12 +12,18 @@ OpenCode Flow enforces a **spec-before-code** methodology. Instead of jumping st
 Specialized AI subagents: `spec-analyst` / `spec-analyst-quick` (spec generation), `spec-implementer` (implementation), `code-reviewer` / `code-review-filter` / `code-fixer` (review + remediation), `dod-evaluator` (DoD gate), `spec-conflict-checker` (pre-flight checks), `external-scout` (dependency docs).
 
 ### Commands (`commands/`)
-User-invokable workflows: `/brainstorm` (pre-spec ideation), `/analyze-issue` (spec generation, add `--quick` for minor changes), `/review-spec` (human approval gate, skipped for `--quick`), `/implement-spec` (single-pass implementation), `/implement-loop` (DoD-gated loop, full specs only), `/review-code` (adversarial review + fix loop), `/create-pr` (structured PR), `/handover` (async handover doc), `/letsgo` (full pipeline end-to-end).
+User-invokable workflows: `/brainstorm` (Notion brief → aligned vision → light GitHub issues on a Project board), `/analyze-issue` (spec generation, add `--quick` for minor changes), `/review-spec` (human approval gate, skipped for `--quick`), `/implement-spec` (single-pass implementation), `/implement-loop` (DoD-gated loop, full specs only), `/review-code` (adversarial review + fix loop), `/create-pr` (structured PR), `/handover` (async handover doc), `/letsgo` (full pipeline end-to-end).
 
 ### Skills (`skills/`)
 `spec-driven-workflow`: 3-file persistence pattern, spec lifecycle rules, decision escalation.
 
 ## Workflow
+
+**Project pipeline (`/brainstorm`):**
+```
+Notion brief → /brainstorm → grilling rounds → vertical slices → GitHub issues + Project board
+```
+Each issue is deliberately light — user story, goal, constraints, and acceptance criteria only. The deep specification is generated per issue later, on demand, by `/analyze-issue <N>` or `/letsgo <N>`.
 
 **Manual pipeline:**
 ```
@@ -45,10 +51,14 @@ Every issue generates exactly three files in `specs/`:
 1. Install [OpenCode](https://opencode.ai)
 2. Copy this repository's contents into your OpenCode configuration directory
 3. Add `specs/*-extdocs.md` to `.gitignore`
-4. Create a light spec (e.g. `specs/FEAT-123.md`) or pass a GitHub issue number directly
+4. Start a project with `/brainstorm <notion-url>`, or create a light spec (e.g. `specs/FEAT-123.md`), or pass a GitHub issue number directly
 5. Run `/analyze-issue specs/FEAT-123.md` (or `/letsgo 123` for the full pipeline)
+
+### Notion Projects
+
+`/brainstorm <notion-url>` reads a Notion project brief, interviews you in rounds until the vision is unambiguous, breaks it into vertical slices, and publishes each slice as a light GitHub issue on a Project board — creating and linking the board if the repository has none. Requires the Notion MCP server and `gh auth login` with the `project` scope. The vision and its rationale persist to Engram; the command writes no files under `specs/`. Each issue stays light, so `/letsgo <N>` on any unblocked issue is the natural next step.
 
 ### GitHub Issue Numbers
 
-Pass a bare number to `/brainstorm`, `/analyze-issue`, or `/letsgo` (e.g. `/letsgo 123`). The command fetches the issue via `gh` CLI and materializes it as `specs/123.md`. Requires `gh auth login`. A numeric first argument is always a GitHub issue, never a manual KEY. See `AGENTS.md` Rule 1 for details.
+Pass a bare number to `/analyze-issue` or `/letsgo` (e.g. `/letsgo 123`). The command fetches the issue via `gh` CLI and materializes it as `specs/123.md`. Requires `gh auth login`. A numeric first argument is always a GitHub issue, never a manual KEY. `/brainstorm` does not take a number — it takes a Notion URL. See `AGENTS.md` Rule 1 for details.
 

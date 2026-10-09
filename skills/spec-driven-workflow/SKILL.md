@@ -36,7 +36,9 @@ Never analyse what you have not read. Fetch raw data into `findings.md` before d
 
 ### 3. Spec before code
 
-No code is written without a spec. Every change begins as a light spec file, is analyzed via `/analyze-issue`, and produces a structured `issue-{KEY}-spec.md` before `/implement-spec` or `/implement-loop` is invoked.
+No code is written without a spec. Every change begins as a light spec, is analyzed via `/analyze-issue`, and produces a structured `issue-{KEY}-spec.md` before `/implement-spec` or `/implement-loop` is invoked.
+
+A light spec is either a file under `specs/` or a GitHub issue. `/brainstorm` publishes light specs as GitHub issues; `/analyze-issue <N>` materializes issue `N` into `specs/{N}.md` before analyzing it.
 
 ### 4. Spec as anchor
 
@@ -85,7 +87,7 @@ Do not create `specs/decisions.md`. Do not use `DEC-NNN` identifiers. The repo-r
 |---------|-----------|--------------|
 | `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) |
 | `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) |
-| `/brainstorm <path>` | `opencode/qwen3.6-plus` | — (inline) |
+| `/brainstorm <notion-url>` | `opencode/qwen3.6-plus` | — (inline; human-in-the-loop, cannot be delegated to a subagent) |
 | `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) |
 | `/review-spec <KEY> [--visual]` | `opencode/qwen3.6-plus` | `@spec-analyst` (on revision) |
 | `/review-code [--max-fix-passes N]` | `opencode/qwen3.5-plus` | `@code-reviewer` → `@code-review-filter` → `@code-fixer` |
@@ -154,10 +156,13 @@ Markdown files when Engram is unavailable.
 
 ### Topic Key Convention
 
-Every `topic_key` must include the ISSUE_KEY prefix to prevent collisions:
+Every `topic_key` must carry a namespace prefix to prevent collisions — ISSUE_KEY for issue-scoped work, PROJECT_SLUG for `/brainstorm` vision work:
 
 | Pattern | topic_key example | Scope |
 |---------|-------------------|-------|
+| Vision source (raw Notion brief) | `vision/my-project/source` | project |
+| Vision decisions (grilling outcome) | `vision/my-project/decisions` | project |
+| Vision slice breakdown | `vision/my-project/breakdown` | project |
 | Implementation progress | `impl/FEAT-123/progress` | project |
 | Test cycles | `impl/FEAT-123/test-cycles` | project |
 | Errors | `impl/FEAT-123/errors` | project |
@@ -180,6 +185,8 @@ If Engram MCP tools are unavailable or return an error:
 3. Use the same structure (checkboxes, evidence lines, tables) as before
 
 ### Markdown Files That Remain
+
+`/brainstorm` is the exception: it writes no Markdown at all. Its vision, settled decisions, and slice breakdown live in Engram only, and its durable artifacts are the GitHub issues it publishes.
 
 These files are NOT replaced by Engram (they need git history and reviewability):
 - `specs/issue-{KEY}-findings.md` — raw light spec data
