@@ -88,12 +88,13 @@ Do not create `specs/decisions.md`. Do not use `DEC-NNN` identifiers. The repo-r
 | `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) |
 | `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) |
 | `/brainstorm <notion-url>` | `opencode/qwen3.6-plus` | — (inline; human-in-the-loop, cannot be delegated to a subagent) |
-| `/implement-spec <KEY>` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus) |
+| `/implement-spec <KEY> [--max-parallel N]` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus; parallel frontier waves when N > 1) |
 | `/review-spec <KEY> [--visual]` | `opencode/qwen3.6-plus` | `@spec-analyst` (on revision) |
-| `/review-code [--max-fix-passes N]` | `opencode/qwen3.5-plus` | `@code-reviewer` → `@code-review-filter` → `@code-fixer` |
+| `/review-code [--max-fix-passes N] [--spec KEY]` | `opencode/qwen3.5-plus` | `@code-reviewer` + `@standards-reviewer` + `@spec-fidelity-reviewer` (parallel) → `@code-review-filter` → `@code-fixer` / `@spec-implementer` |
 | `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` |
 | `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (inline) |
 | `/handover` | `opencode/qwen3.6-plus` | — (inline) |
+| `/retro [<session or KEY>]` | `opencode/qwen3.6-plus` | — (inline) |
 | `/letsgo <path> [--quick] [--headless] [...]` | `opencode/qwen3.6-plus` | all above, chained |
 
 ---
@@ -106,8 +107,10 @@ Do not create `specs/decisions.md`. Do not use `DEC-NNN` identifiers. The repo-r
 | `spec-analyst-quick` | subagent | 2-phase compact spec |
 | `spec-implementer` | subagent | Implements from spec, tracks progress |
 | `code-fixer` | subagent (hidden) | Surgical fixer — applies review findings |
-| `code-reviewer` | subagent (hidden) | Adversarial diff review |
-| `code-review-filter` | subagent (hidden) | Filters reviewer findings |
+| `code-reviewer` | subagent (hidden) | Adversarial diff review — bugs axis |
+| `standards-reviewer` | subagent (hidden) | Documented repo standards + Fowler smell baseline — standards axis |
+| `spec-fidelity-reviewer` | subagent (hidden) | Spec fidelity: missing requirements, scope creep, spec drift — spec axis |
+| `code-review-filter` | subagent (hidden) | Filters reviewer findings (per-axis, never reranks across axes) |
 | `dod-evaluator` | subagent (hidden) | Binary PASS/FAIL on DoD items |
 | `spec-conflict-checker` | subagent (hidden) | CLEAR/CONFLICTS verdict on spec vs decisions.md + codebase |
 | `external-scout` | subagent (hidden) | Fetches current docs for external dependencies |
@@ -121,6 +124,9 @@ Loop behaviour is enforced via:
 
 **Prompt-level:**
 - `spec-implementer` follows the spec as the single source of truth.
+- `spec-implementer` works each sub-task as a red-green TDD loop at the seams
+  declared in the spec's Test Strategy (fallbacks for quick-mode specs and
+  missing test runners are defined in its prompt).
 - `spec-implementer` blocks completion until every DoD checkbox is satisfied.
 
 **Loop-level (`/implement-loop` only):**
@@ -136,10 +142,20 @@ Loop behaviour is enforced via:
 - Implementation loop: identical to `/implement-loop`'s, budget `--max-impl-passes`
   (default 3). Unresolved after budget → asks the human whether to continue or stop.
   Under `--headless`, critical DoD failures stop the pipeline.
-- Code-review remediation loop: `code-reviewer` + `code-review-filter` produce
-  findings; `code-fixer` applies them (falling back to `spec-implementer` if spec context is needed); re-review until clean or
+- Code-review remediation loop: three parallel reviewers (`code-reviewer` —
+  bugs axis; `standards-reviewer` — standards axis; `spec-fidelity-reviewer` —
+  spec axis) produce findings; `code-review-filter` filters per-axis (never
+  reranking across axes); `code-fixer` applies bugs/standards findings,
+  `spec-implementer` applies spec-fidelity findings; re-review until clean or
   `--max-fix-passes` (default 3). Unresolved after budget → asks the human
   whether to continue or stop. Under `--headless`, residual findings stop the pipeline (no PR opened).
+
+**Frontier-wave dispatch (`/implement-spec` only):** with `--max-parallel N`
+(default 2), the Implementation Plan's `Depends On` column is treated as a task
+graph; up to N sub-tasks on the ready frontier whose declared `Files` sets are
+pairwise disjoint run as concurrent `spec-implementer` dispatches per wave.
+`/implement-loop` and `/letsgo` remain strictly sequential (their DoD and fix
+loops assume a single implementer).
 
 **Test gate (`/letsgo` only):** Runs after implementation, before code review.
 With `--strict-tests` (default under `--headless`), test failures after the fix budget stop the pipeline (no PR opened). Without it, failures are logged but the pipeline continues. A post-review test re-run catches regressions from code-fixer changes before PR creation.

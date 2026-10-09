@@ -9,13 +9,14 @@ OpenCode Flow enforces a **spec-before-code** methodology. Instead of jumping st
 ## Architecture
 
 ### Agents (`agents/`)
-Specialized AI subagents: `spec-analyst` / `spec-analyst-quick` (spec generation), `spec-implementer` (implementation), `code-reviewer` / `code-review-filter` / `code-fixer` (review + remediation), `dod-evaluator` (DoD gate), `spec-conflict-checker` (pre-flight checks), `external-scout` (dependency docs).
+Specialized AI subagents: `spec-analyst` / `spec-analyst-quick` (spec generation), `spec-implementer` (implementation, red-green TDD at declared seams), `code-reviewer` (bugs axis) / `standards-reviewer` (standards axis) / `spec-fidelity-reviewer` (spec axis) / `code-review-filter` / `code-fixer` (three-axis review + remediation), `dod-evaluator` (DoD gate), `spec-conflict-checker` (pre-flight checks), `external-scout` (dependency docs).
 
 ### Commands (`commands/`)
-User-invokable workflows: `/brainstorm` (Notion brief → aligned vision → light GitHub issues on a Project board), `/analyze-issue` (spec generation, add `--quick` for minor changes), `/review-spec` (human approval gate, skipped for `--quick`), `/implement-spec` (single-pass implementation), `/implement-loop` (DoD-gated loop, full specs only), `/review-code` (adversarial review + fix loop), `/create-pr` (structured PR), `/handover` (async handover doc), `/letsgo` (full pipeline end-to-end).
+User-invokable workflows: `/brainstorm` (Notion brief → aligned vision → light GitHub issues on a Project board), `/analyze-issue` (spec generation, add `--quick` for minor changes), `/review-spec` (human approval gate, skipped for `--quick`), `/implement-spec` (task-graph implementation with parallel frontier waves via `--max-parallel`), `/implement-loop` (DoD-gated loop, full specs only), `/review-code` (three-axis review — bugs / standards / spec fidelity — + fix loop), `/create-pr` (structured PR: Summary visual, Evidence, Merge Danger), `/handover` (async handover doc), `/retro` (post-session environment audit), `/letsgo` (full pipeline end-to-end).
 
 ### Skills (`skills/`)
 `spec-driven-workflow`: 3-file persistence pattern, spec lifecycle rules, decision escalation.
+`debugging-and-error-recovery`: six-phase diagnosis loop (feedback loop first), stop-the-line, 3-strike escalation.
 
 ## Workflow
 

@@ -1,5 +1,5 @@
 ---
-description: Run the full pipeline end-to-end — analyze, auto-resolve spec conflicts, implement, adversarially review, remediate, and open a PR.
+description: Run the full pipeline end-to-end — analyze, auto-resolve spec conflicts, implement, review along three axes (bugs/standards/spec), remediate, and open a PR.
 argument-hint: <path-to-light-spec> [--quick] [--headless] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N] [--strict-tests] [--no-strict-tests] [--make-ci] [--spec-confidence N]
 agent: build
 model: opencode/qwen3.6-plus
@@ -468,7 +468,7 @@ Otherwise, record TEST_SOURCE and run tests.
 Print `✅ Tests passed (source: TEST_SOURCE).` Set TEST_RESULT = "passed", proceed to **Step 6**.
 
 ### If tests fail
-Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test output; fall back to `@spec-implementer` if spec context needed. Re-run tests after each fix.
+Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test output; fall back to `@spec-implementer` if spec context needed (its prompt inherits the `debugging-and-error-recovery` skill — the fix must follow the diagnosis phases, not guess). Re-run tests after each fix.
 
 If tests pass within budget, print `✅ Tests passed after N fix pass(es) (source: TEST_SOURCE).` Set TEST_RESULT = "passed-after-fix", proceed to **Step 6**.
 
@@ -478,7 +478,11 @@ If tests still fail:
 
 ---
 
-## Step 6 — Adversarial code review
+## Step 6 — Three-axis code review
+
+Review runs along three independent axes (Bugs, Standards, Spec), dispatched
+as parallel subagents in Step 7a so they don't pollute each other's context.
+Findings are never reranked across axes.
 
 Collect the diff:
 ```bash
@@ -492,7 +496,9 @@ If the diff is empty, print `✅ No changes detected vs BASE_BRANCH. Skipping re
 and go to **Step 8**.
 
 If fewer than 5 lines changed (additions + deletions), print
-`ℹ️  Diff is trivial (<5 lines). Skipping adversarial review.` and go to **Step 8**.
+`ℹ️  Diff is trivial (<5 lines). Skipping code review.` and go to **Step 8**.
+(Deliberate: spec-fidelity could flag missing requirements even on a small
+diff, but the DoD gate at Step 5 already covers that case.)
 
 Otherwise run the remediation loop below.
 
@@ -506,8 +512,19 @@ Repeat while ISSUES_REMAIN and FIX_PASS <= MAX_FIX_PASSES:
 
 **7a — Review**
 
-Invoke `@code-reviewer` with the current diff and recent commits (same prompt
-shape as `/review-code` Step 3). Capture as REVIEWER_OUTPUT.
+Dispatch the following subagent invocations **together, in a single message**,
+so they run concurrently (same prompt shapes as `/review-code` Step 3):
+
+1. `@code-reviewer` with the current diff and recent commits. Capture as BUGS_OUTPUT.
+2. `@standards-reviewer` with the current diff and recent commits. Capture as STANDARDS_OUTPUT.
+3. `@spec-fidelity-reviewer` with the current diff, recent commits, and:
+   > Spec: `specs/issue-ISSUE_KEY-spec.md`
+   Capture as SPEC_OUTPUT. (The spec always exists here — it was generated in
+   Step 1 — so this axis always runs, in quick mode too, where the contract is
+   the spec's `## What` / `## Done When` sections.)
+
+Combine the three outputs with `## Bugs`, `## Standards`, `## Spec` markers
+into REVIEWER_OUTPUT.
 
 Invoke `@code-review-filter` with REVIEWER_OUTPUT and the diff (same prompt
 shape as `/review-code` Step 4). Capture as FINAL_OUTPUT.
@@ -525,7 +542,7 @@ Call `mem_update` with:
 - `scope`: project
 - `content`:
   **What**: Code review pass FIX_PASS completed
-  **Why**: Adversarial code review for ISSUE_KEY
+  **Why**: Three-axis code review (bugs / standards / spec fidelity) for ISSUE_KEY
   **Where**: Diff vs BASE_BRANCH
   **Learned**: FINAL_OUTPUT
 
@@ -537,12 +554,13 @@ FINAL_OUTPUT
 
 **7d — Fix, if needed**
 
-If ISSUES_REMAIN and FIX_PASS < MAX_FIX_PASSES, invoke `@code-fixer` with:
+If ISSUES_REMAIN and FIX_PASS < MAX_FIX_PASSES, route findings by axis:
 
-> Address review findings for **ISSUE_KEY**: FINAL_OUTPUT. Fix only what's listed. Read current state first.
-
-If spec context needed, fall back to `@spec-implementer` with:
-> Address review findings for **ISSUE_KEY**. Spec: `specs/issue-ISSUE_KEY-spec.md`. Findings: FINAL_OUTPUT. Re-check against spec before resolving. Track progress.
+- Bugs and Standards findings → invoke `@code-fixer` with:
+  > Address review findings for **ISSUE_KEY**: <bugs/standards findings from FINAL_OUTPUT>. Fix only what's listed. Read current state first.
+- Spec findings (`missing-requirement | scope-creep | spec-drift`) always need
+  spec context → invoke `@spec-implementer` with:
+  > Address spec-fidelity review findings for **ISSUE_KEY**. Spec: `specs/issue-ISSUE_KEY-spec.md`. Findings: <spec findings from FINAL_OUTPUT>. Re-check against spec before resolving. Track progress.
 
 Re-collect the diff (same commands as Step 6) before looping back to 7a, since
 the fix pass changed it.
@@ -557,7 +575,7 @@ If ISSUES_REMAIN == false, print:
 ```
 and proceed to **Step 8**.
 
-If ISSUES_REMAIN == true after MAX_FIX_PASSES passes, count findings by severity: CRITICAL_FINDINGS, WARNING_FINDINGS, NITPICK_FINDINGS.
+If ISSUES_REMAIN == true after MAX_FIX_PASSES passes, count findings by severity: CRITICAL_FINDINGS, WARNING_FINDINGS, NITPICK_FINDINGS. (Smell findings are judgement calls — they count as warning or nitpick, never critical.)
 
 If RISK_BUDGET > 0 and CRITICAL_FINDINGS == 0 and (WARNING_FINDINGS + NITPICK_FINDINGS) <= RISK_BUDGET, print `ℹ️  ISSUE_KEY code review within risk budget. Auto-continuing.`, call `mem_update` with:
 - `topic_key`: "pipeline/ISSUE_KEY/code-review"
@@ -686,15 +704,32 @@ If the working tree is clean, skip to 8d.
 
 ### 8d — Draft the PR description
 
+Skip all preambles and keep prose brief. Use the project's domain language
+(from `GLOSSARY.md` if it exists). Follow this template:
+
 ```markdown
-## What Changed
-- <bullet points of key changes, grounded in the diff>
+## Summary
 
-## Why This Change
-- <business or technical justification, inferred from commits and diff>
+<the smallest visual that makes the key point clear: pseudocode for logic,
+call tree for control flow, component/file tree for structure or broad
+refactors, Mermaid for interaction/data flow, or a diff-shaped sketch when
+the surrounding shape already exists. Place each visual next to the short
+text it supports; use one or a few, not all.>
 
-## Testing Done
-- <what tests were added or run>
+## Evidence
+
+- **Before:** <from Step 5b: failing test output, or "tests passed first run (source: TEST_SOURCE)">
+  **After:** <passing test output from Step 5b / Step 7.5 (POST_REVIEW_TEST); screenshots are S-tier for visual changes when available>
+
+## Merge Danger
+
+**Door:** <one-way | two-way>
+
+<optional: one-sentence description>
+
+**Blast Radius:** <one-word description>
+
+<optional: potential ramifications of merge>
 
 ## Related Issues
 - ISSUE_KEY
@@ -703,6 +738,20 @@ If the working tree is clean, skip to 8d.
 - <mention if spec was approved via automated conflict resolution vs human escalation>
 - <mention if DoD or code review budgets were exhausted and continued on human override>
 ```
+
+**Evidence rules**: never invent evidence — use the captured TEST_RESULT /
+POST_REVIEW_TEST outputs and test names from Steps 5b and 7.5. If no automated
+evidence exists (TEST_RESULT = "skipped"), state what is true (e.g. "no test
+runner configured; DoD verified by @dod-evaluator").
+
+**Merge Danger derivation (no human prompt — must work headless)**:
+- **Door**: `one-way` if the diff contains destructive or hard-to-reverse
+  changes — schema drops/destructive migrations, data deletion or transforms,
+  removed public API, deleted files other consumers import, credential or
+  permission changes. Otherwise `two-way`.
+- **Blast Radius**: one word derived from the diff's reach — `none` (docs,
+  comments), `single-module`, `cross-module`, `all-consumers` (public API),
+  `schema` (database/migrations). Then optional ramifications.
 
 Write it to `pr-description.md` in the repo root. Never commit this file.
 
@@ -732,7 +781,7 @@ Print a summary of the whole run:
   Implementation: <PASS in N passes | continued with unmet DoD items (non-critical only) | headless-stopped: DoD>
   Test suite:    <passed | passed-after-fix | failed | skipped> (source: TEST_SOURCE)
   Post-review:   <passed | passed-after-fix | failed | skipped>
-  Code review:   <clean in N passes | continued with residual findings (within risk budget) | headless-stopped: review>
+  Code review:   <clean in N passes | continued with residual findings (within risk budget) | headless-stopped: review> (residual per axis: bugs=N standards=N spec=N)
   Branch:        <branch name>
   PR:            <URL returned by gh pr create>
 

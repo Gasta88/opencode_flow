@@ -154,15 +154,31 @@ Update `progress.md`: mark Phase 3 complete with an `Evidence:` line.
 
 ## Phase 4 — Implementation Plan
 
-Break the work into 5–7 sub-tasks. Append to `spec.md`:
+Break the work into 5–7 sub-tasks. Where possible, cut sub-tasks as
+**tracer-bullet vertical slices**: each slices a narrow but complete path
+through the layers it touches and is verifiable on its own when done, rather
+than being a horizontal slice of one layer. Size each sub-task to fit a single
+fresh agent context.
+
+If the light spec contains a `## Blocked by` section (inherited from a
+`/brainstorm`-published GitHub issue), treat those inter-issue edges as
+context — they gate the whole issue, not individual sub-tasks. The
+`Depends On` column below remains the intra-spec task graph.
+
+Every sub-task must declare its **file set** — the files it will create or
+modify, from the Technical Specification. The dispatcher uses these sets to
+decide which sub-tasks can safely run in parallel (disjoint sets only). If two
+sub-tasks must touch the same file, express that as a `Depends On` edge.
+
+Append to `spec.md`:
 
 ```markdown
 ## Implementation Plan
 
-| # | Sub-task | Complexity (1–5) | Depends On |
-|---|----------|------------------|------------|
-| 1 | ... | 2 | — |
-| 2 | ... | 3 | 1 |
+| # | Sub-task | Complexity (1–5) | Depends On | Files |
+|---|----------|------------------|------------|-------|
+| 1 | ... | 2 | — | src/a.ts, tests/a.test.ts |
+| 2 | ... | 3 | 1 | src/b.ts, tests/b.test.ts |
 
 ### Risks
 | Risk | Likelihood | Mitigation |
@@ -184,18 +200,33 @@ Append to `spec.md`:
 ### Test Command
 [the exact command(s) to run tests, e.g. `pytest tests/`, `npm test`, `go test ./...`]
 
+### Seams
+| Seam (public boundary under test) | Catches | Misses |
+|-----------------------------------|---------|--------|
+| <module/API/CLI/interface> | <one line> | <one line> |
+
 ### Unit Tests
-- [ ] ...
+- [ ] <test case> — seam: <declared seam>
 
 ### Integration Tests
-- [ ] ...
+- [ ] <test case> — seam: <declared seam>
 
 ### E2E Scenarios
-- [ ] ...
+- [ ] <test case> — seam: <declared seam>
 
 ### Edge Cases
-- [ ] ...
+- [ ] <test case> — seam: <declared seam>
 ```
+
+**Seam rules**: a seam is the public boundary where behavior is observed
+without reaching inside — tests live at seams, never against internals.
+Declare the seams explicitly: the implementer works red-green and is not
+allowed to write tests at undeclared seams. You cannot test everything;
+declaring seams is how testing effort lands on critical paths and complex
+logic instead of every edge case. Every test case above must reference one
+declared seam. Expected values in tests must come from an independent source
+of truth (a known-good literal, a worked example, this spec) — never from
+recomputing what the code does.
 
 Update `progress.md`: mark Phase 5 complete with an `Evidence:` line.
 

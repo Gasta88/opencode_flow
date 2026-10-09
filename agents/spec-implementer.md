@@ -61,19 +61,62 @@ checked, skip them and resume from the first unchecked item.
 ### 1. One sub-task at a time
 Complete sub-task N fully before starting N+1. Never skip ahead.
 
+**Single-sub-task dispatch**: when your dispatch prompt names exactly one
+sub-task N (parallel frontier mode), implement only N. Do not touch files
+outside sub-task N's declared `Files` set — other sub-tasks are being
+implemented concurrently by other agents. Do not commit their work, do not
+mark any other sub-task complete, and track your progress under Engram
+`topic_key: impl/ISSUE_KEY/subtask-N`.
+
 ### 2. Spec is the source of truth
 The spec governs all implementation decisions. Keep the spec in context while working.
 If the codebase and the spec conflict, the spec wins — unless there is a
 clear technical blocker. In that case, note the blocker in `progress.md`
 under `## Errors` and ask the user before deviating.
 
-### 3. Tests alongside code
-For each sub-task, write the corresponding test cases from the Test Strategy
-**before** marking the sub-task complete. Run the relevant test suite. On
-failure, follow the `debugging-and-error-recovery` skill (five-step triage:
-reproduce → localize → reduce → fix → guard) rather than guessing. Repeat
-until green. **Do not check the box while tests fail.** After 3 consecutive
-failures on the same test, escalate to the user (see Error protocol below).
+### 3. Red-green per sub-task (test-driven)
+
+Work each sub-task as a **red → green loop**, one vertical slice at a time:
+
+1. **Red**: write the failing test(s) for this sub-task first, taken from the
+   spec's Test Strategy, at the seam the Test Strategy declares. Run them and
+   **watch them fail**. A test you have not watched fail is not evidence.
+2. **Green**: write only enough implementation to make the failing test pass.
+   Do not anticipate future sub-tasks or add speculative features.
+3. Re-run the relevant test suite. **Do not check the box while tests fail.**
+   On failure, follow the `debugging-and-error-recovery` skill (feedback loop →
+   reproduce+minimise → hypothesise → instrument → fix+guard → cleanup) rather
+   than guessing. Repeat until green. After 3 consecutive failures on the same
+   test, escalate to the user (see Error protocol below).
+
+**Loop rules:**
+- **One slice at a time**: one seam, one test, one minimal implementation per
+  cycle. Never write all the tests first and then all the code — bulk tests
+  verify _imagined_ behavior and lock in test structure before you understand
+  the implementation.
+- **Refactoring is not part of the loop.** Structural cleanup belongs to code
+  review remediation, not the red-green cycle.
+
+**Test quality bars (anti-patterns — reject these in your own tests):**
+- **Implementation-coupled**: mocking internal collaborators, testing private
+  methods, or verifying through a side channel. The tell: the test breaks when
+  you refactor but behavior hasn't changed. Tests verify behavior through
+  public interfaces.
+- **Tautological**: the assertion recomputes the expected value the way the
+  code does (`expect(add(a, b)).toBe(a + b)`). Expected values must come from
+  an independent source of truth: a known-good literal, a worked example, or
+  the spec.
+- **Off-seam**: a test written anywhere other than the declared seam.
+
+**Seam resolution (fallback chain):**
+1. Full-mode spec with a Test Strategy declaring **Seams** → strict red-green
+   at those seams. No test is written at an undeclared seam.
+2. Quick-mode spec (no Test Strategy) → derive test cases from `## Done When`
+   / Definition of Done; choose the public boundary that observes the behavior
+   as the seam, and record the chosen seam in the progress Evidence line.
+3. No test runner discoverable (see `debugging-and-error-recovery` skill's
+   "Finding the test command") → implement without tests and record
+   `Evidence: no verification possible because <reason>`. Never guess a stack.
 
 ### 4. Track progress via Engram (primary) + progress.md (fallback)
 

@@ -33,25 +33,89 @@ git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
 git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
 ```
 
-## Step 3 — Draft the PR description
+## Step 3 — Gather evidence
 
-Generate a description following this template:
+Before drafting, collect concrete evidence that the change works:
+
+1. If a test suite exists, run it and capture the output. If a test was added or
+   fixed by this change, note its name and its before/after result.
+2. If the change is visual and screenshots are feasible, note that; otherwise
+   rely on execution-based evidence (test results, console output).
+3. If no automated evidence exists, use what is true — e.g. "manual smoke test:
+   <what was exercised>". Never invent evidence.
+
+## Step 4 — Draft the PR description
+
+Skip all preambles and keep prose brief. Use the project's domain language
+(from `GLOSSARY.md` if it exists). Generate a description following this
+template:
 
 ```markdown
-## What Changed
-- <bullet points of key changes, grounded in the diff>
+## Summary
 
-## Why This Change
-- <business or technical justification, inferred from commits and diff>
+<the smallest visual that makes the key point clear — see guidance below>
 
-## Testing Done
-- <what tests were added or run; "manual smoke test" is acceptable if true>
+## Evidence
+
+- **Before:** <screenshot/output/failing test run>
+  **After:** <screenshot/output/passing test run>
+
+## Merge Danger
+
+**Door:** <one-way | two-way>
+
+<optional: one-sentence description>
+
+**Blast Radius:** <one-word description>
+
+<optional: potential ramifications of merge>
 
 ## Related Issues
 - <issue keys mentioned in commit messages, e.g. FEAT-123>
 ```
 
-## Step 4 — Write the description to disk
+### Summary guidance
+
+Pick the smallest view that makes the key point clear. Place each visual next
+to the short text it supports. You may use one of these or several; it is
+unlikely you will use all of them — do not overwhelm the reader.
+
+- **Logic or algorithm** → pseudocode:
+  ```text
+  on(save)
+    if content is unchanged
+      return cached result
+    write new content
+  ```
+- **Runtime control flow** → call tree:
+  ```text
+  submitForm
+    createSession
+      persistPrompt
+    navigateToSession
+  ```
+- **UI structure** → component tree, including state and module boundaries that matter.
+- **File responsibility or broad refactor** → shallow file tree with one-line annotations.
+- **Component interaction / data flow** → Mermaid (`sequenceDiagram`, `flowchart`).
+- **The point is what changes and the surrounding shape already exists** → `diff`-shaped sketch (component trees, file layouts, call trees, or control flow with `+`/`-` markers).
+- **Most of a block is new** → show the whole block as code.
+
+### Evidence guidance
+
+Screenshots are S-tier when the change is visual and the environment supports
+them. Execution-based evidence is A-tier: test results, console output — show
+the exact test that failed before and passes now.
+
+### Merge Danger guidance
+
+- **Door**: a two-way door can be walked back (cheap revert); a one-way door
+  cannot (destructive actions, schema drops, data migrations, removed public
+  API, hard-to-reverse decisions).
+- **Blast Radius**: the potential impact or scope of the change — one word
+  (e.g. `none`, `single-module`, `all-consumers`, `schema`), then optional
+  ramifications (breakages for consumers, layout shift, migrations required).
+
+## Step 5 — Write the description to disk
 
 Write the description to `pr-description.md` in the repo root.
 
@@ -59,7 +123,7 @@ Write the description to `pr-description.md` in the repo root.
 committed.
 
 
-## Step 5 — Create the PR
+## Step 6 — Create the PR
 
 ```bash
 gh pr create --title "$ARGUMENTS" --body-file pr-description.md
@@ -67,7 +131,7 @@ gh pr create --title "$ARGUMENTS" --body-file pr-description.md
 
 If `gh` is not authenticated, stop and tell the user to run `gh auth login`.
 
-## Step 6 — Clean up
+## Step 7 — Clean up
 
 
 ```bash
