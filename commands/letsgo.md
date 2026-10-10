@@ -1,6 +1,6 @@
 ---
 description: Run the full pipeline end-to-end — analyze, auto-resolve spec conflicts, implement, review along three axes (bugs/standards/spec), remediate, and open a PR.
-argument-hint: <path-to-light-spec> [--quick] [--headless] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N] [--strict-tests] [--no-strict-tests] [--make-ci] [--spec-confidence N]
+argument-hint: <path-to-light-spec> [--quick] [--headless] [--base <branch>] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N] [--strict-tests] [--no-strict-tests] [--make-ci] [--spec-confidence N]
 agent: build
 model: opencode/qwen3.6-plus
 ---
@@ -38,6 +38,17 @@ Extract:
 - **SPEC_CONFIDENCE**: the float after `--spec-confidence` if present, else `0.0`
   (0.0 = escalate all conflicts regardless of confidence; 0.8 = escalate only
   conflicts tagged with confidence >= 0.8)
+- **BASE**: the token immediately after `--base` if present, else `null`.
+  Normalization: strip a leading `origin/` from the value, so `--base origin/ai/integration`
+  and `--base ai/integration` both resolve to the bare branch name `ai/integration`.
+  Validation: if `--base` appears but there is no following token, or the next token
+  starts with `--`, print
+  `❌ --base requires a branch name (e.g. --base ai/integration).` and STOP
+  immediately (hard stop — no interactive prompt, so this is headless-safe; do NOT
+  consume the flag-like token as the branch name).
+  Set **BASE_EFFECTIVE** = `BASE` if BASE is not null, else `default(origin/HEAD)`.
+  BASE is resolved once here and in Step 0.1 into `BASE_BRANCH`/`BASE_REF` for the
+  steps that follow (0.1, 6, 7d, 8b, 8b.5, 8e, 9).
 
 ## Step 0.5 — GitHub issue detection & materialize
 
@@ -90,26 +101,52 @@ Verify FILE_PATH exists and is readable. If not, stop and print:
 
 Print banner:
 ```
-🚀 /letsgo issue-ISSUE_KEY | quick=QUICK_MODE headless=HEADLESS spec-turns=MAX_SPEC_TURNS impl-passes=MAX_IMPL_PASSES fix-passes=MAX_FIX_PASSES auto-commit=AUTO_COMMIT risk-budget=RISK_BUDGET strict-tests=STRICT_TESTS make-ci=MAKE_CI spec-confidence=SPEC_CONFIDENCE
+🚀 /letsgo issue-ISSUE_KEY | quick=QUICK_MODE headless=HEADLESS base=BASE_EFFECTIVE spec-turns=MAX_SPEC_TURNS impl-passes=MAX_IMPL_PASSES fix-passes=MAX_FIX_PASSES auto-commit=AUTO_COMMIT risk-budget=RISK_BUDGET strict-tests=STRICT_TESTS make-ci=MAKE_CI spec-confidence=SPEC_CONFIDENCE
 ```
 
 ### Step 0.1 — Create feature branch up front
 
+Resolve the base branch and the remote-tracking ref that every later step
+(Steps 6, 7d, 8b, 8b.5, 8e, 9) consumes. Use exactly one of the two paths below,
+depending on whether BASE was set in Step 0.
+
+**When BASE is set** (the `--base <branch>` flag was passed; BASE was already
+normalized in Step 0 — leading `origin/` stripped):
+```bash
+BASE_BRANCH=<BASE>
+BASE_REF=origin/$BASE_BRANCH
+git fetch origin $BASE_BRANCH
+```
+If the `git fetch` exits non-zero (e.g. `couldn't find remote ref`), print
+`❌ Remote branch origin/<BASE> not found (fetch failed). Stopping.` and STOP
+before any implementation runs (hard stop — no interactive prompt, headless-safe).
+If the current branch equals BASE_BRANCH (i.e. already checked out on the base):
+```bash
+FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
+git checkout -b $FEATURE_BRANCH $BASE_REF
+```
+Print `✅ Created feature branch $FEATURE_BRANCH from origin/$BASE_BRANCH.`
+If already on a different non-base branch, use it as-is and set FEATURE_BRANCH to
+the current branch name — `BASE_REF` still points at `origin/<BASE>` for later steps.
+
+**When BASE is null** (default path — behavior unchanged):
 Determine the base branch:
 ```bash
 BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
 [ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
 ```
-
+Bind `BASE_REF=$BASE_BRANCH` (the bare derived name — no `origin/` prefix is added
+and no `git fetch` is run on the default path, so every later git command emits
+exactly what it did before).
 If the current branch equals BASE_BRANCH (i.e. still on `main`/`master`):
 ```bash
 FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
 git checkout -b $FEATURE_BRANCH
 ```
 Print `✅ Created feature branch $FEATURE_BRANCH from origin/$BASE_BRANCH.`
-
-Store BASE_BRANCH and FEATURE_BRANCH as variables for later steps.
 If already on a non-default branch, use it as-is and set FEATURE_BRANCH to the current branch name.
+
+Store BASE_BRANCH, BASE_REF and FEATURE_BRANCH as variables for later steps.
 
 ### Step 0.25 — Trivial-change detection
 
@@ -485,12 +522,19 @@ as parallel subagents in Step 7a so they don't pollute each other's context.
 Findings are never reranked across axes.
 
 Collect the diff:
-```bash
-BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
-[ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
-git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
-git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
-```
+
+- **When BASE is set** (`BASE_REF=origin/<base>` was established in Step 0.1):
+  ```bash
+  git diff $(git merge-base HEAD $BASE_REF)..HEAD
+  git log $(git merge-base HEAD $BASE_REF)..HEAD --oneline
+  ```
+- **When BASE is null** (default path — behavior unchanged):
+  ```bash
+  BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
+  [ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
+  git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
+  git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
+  ```
 
 If the diff is empty, print `✅ No changes detected vs BASE_BRANCH. Skipping review.`
 and go to **Step 8**.
@@ -653,14 +697,24 @@ Use this as PR_TITLE. If no usable summary can be extracted, fall back to
 
 ### 8b — Analyse changes
 
-```bash
-BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
-[ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
-git status --short
-git branch --show-current
-git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
-git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
-```
+Analyse the changes against the base:
+
+- **When BASE is set** (`BASE_REF=origin/<base>` was established in Step 0.1):
+  ```bash
+  git status --short
+  git branch --show-current
+  git diff $(git merge-base HEAD $BASE_REF)..HEAD
+  git log $(git merge-base HEAD $BASE_REF)..HEAD --oneline
+  ```
+- **When BASE is null** (default path — behavior unchanged):
+  ```bash
+  BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
+  [ -z "$BASE_BRANCH" ] && BASE_BRANCH=main
+  git status --short
+  git branch --show-current
+  git diff $(git merge-base HEAD $BASE_BRANCH)..HEAD
+  git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
+  ```
 
 ### 8b.5 — Feature branch verification
 
@@ -668,11 +722,20 @@ The feature branch was created in Step 0.1. Verify we are on it:
 ```bash
 CURRENT_BRANCH=$(git branch --show-current)
 ```
-If CURRENT_BRANCH equals BASE_BRANCH (unexpected — should not happen), create it now:
-```bash
-FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
-git checkout -b $FEATURE_BRANCH
-```
+If CURRENT_BRANCH equals the bare `BASE_BRANCH` name (compare against `BASE_BRANCH`,
+never `BASE_REF` — this holds in both modes: default and `--base`) (unexpected — should
+not happen), create it now:
+
+- **When BASE is set** (create from the remote-tracking ref):
+  ```bash
+  FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
+  git checkout -b $FEATURE_BRANCH $BASE_REF
+  ```
+- **When BASE is null** (default path — create from current HEAD):
+  ```bash
+  FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
+  git checkout -b $FEATURE_BRANCH
+  ```
 Otherwise, continue on the existing FEATURE_BRANCH.
 
 ### 8c — Review and commit changes
@@ -757,9 +820,16 @@ Write it to `pr-description.md` in the repo root. Never commit this file.
 
 ### 8e — Create the PR
 
-```bash
-gh pr create --title "PR_TITLE" --body-file pr-description.md
-```
+- **When BASE is set** (pass the bare branch name — gh resolves the PR target
+  server-side; never pass `origin/<base>` or `$BASE_REF` to gh here):
+  ```bash
+  gh pr create --base "$BASE_BRANCH" --title "PR_TITLE" --body-file pr-description.md
+  ```
+- **When BASE is null** (default path — behavior unchanged; gh targets the repo
+  default branch):
+  ```bash
+  gh pr create --title "PR_TITLE" --body-file pr-description.md
+  ```
 
 If `gh` is not authenticated, stop and tell the user to run `gh auth login`.
 
@@ -783,6 +853,7 @@ Print a summary of the whole run:
   Post-review:   <passed | passed-after-fix | failed | skipped>
   Code review:   <clean in N passes | continued with residual findings (within risk budget) | headless-stopped: review> (residual per axis: bugs=N standards=N spec=N)
   Branch:        <branch name>
+  Base:          <BASE_EFFECTIVE — e.g. ai/integration, or default(origin/HEAD) when --base was omitted>
   PR:            <URL returned by gh pr create>
 
 See specs/issue-ISSUE_KEY-progress.md for the full audit trail.
