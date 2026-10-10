@@ -14,6 +14,71 @@ the gates between phases. This command inlines the logic of `/analyze-issue`,
 `/create-pr` because commands cannot invoke other commands directly. Follow
 the spec-driven-workflow skill exactly throughout.
 
+## Step R — Result Contract
+
+The auto-flow driver reads `specs/issue-ISSUE_KEY-result.json` to learn how this
+`/letsgo` run ended — outcome, stage, and PR URL — without parsing logs. This
+section is the single canonical contract. Every exit point in this command
+carries a `Result hook (E1)` … `Result hook (E17)` line stating the exact
+`outcome`/`stage`/`reason` for that exit; the hooks reference this section.
+
+### JSON template
+
+Write exactly these fields — the schema is frozen by the driver contract: never
+add a field, never rename one, never write driver-side outcome values
+(`timeout`, `no_result`, `interrupted`, `make_ci_failed`, `merge_failed` are the
+driver's to synthesize; `/letsgo` never writes them):
+
+```json
+{
+  "issue": 42,
+  "outcome": "pr_opened",
+  "stage": "pr",
+  "reason": "PR opened successfully",
+  "branch": "feat/42-20261010120000",
+  "pr_url": "https://github.com/owner/repo/pull/43",
+  "pipeline": { "spec_turns": 2, "impl_passes": 1, "fix_passes": 2 }
+}
+```
+
+### Field derivation rules
+
+| Field | Type | Rule |
+|-------|------|------|
+| `issue` | JSON number or string | `ISSUE_KEY`; emit as a JSON **number** when it matches `^[0-9]+$` (GitHub-issue path, Step 0.5), else as a JSON **string** (file-path arg like `FEAT-123`). At exits before Step 0.5 (E1), use the first token of `$ARGUMENTS` when it is numeric, else the Step 0 derived key. |
+| `outcome` | string enum | Exactly `"pr_opened"` (E17 only) or `"stopped"` (E1–E16). |
+| `stage` | string enum | One of `"spec"`, `"dod"`, `"tests"`, `"review"`, `"pr"` — the **last phase reached before exit**, not the phase that would have run next. Each hook declares its value; E11 (Step 7.5) maps to `"tests"` because the failing gate is the test gate (its `reason` records "post-review"). |
+| `reason` | string | Non-empty; quotes the printed ⚠️/❌ stop message for the exit (each hook states the exact value to write). |
+| `branch` | string | `FEATURE_BRANCH` if set (Step 0.1 onward), else `""` — never null. |
+| `pr_url` | string | The URL returned by `gh pr create` at E17, else `""` — never null. |
+| `pipeline` | object, optional | `{ "spec_turns": int, "impl_passes": int, "fix_passes": int }` — `spec_turns` = Step 2 conflict-loop turns executed (0 when Step 2 is skipped: quick/trivial); `impl_passes` = Step 5 implementation passes completed (1 in quick mode); `fix_passes` = Step 7 review-remediation passes completed (0 if Step 7 was skipped for a trivial diff — the Step 5b/7.5 test-fix loops are NOT counted). Unreached counters = 0. **Omit the `pipeline` key entirely** (not `{}`, not `null`) when no counter has been initialised — the exits before Step 1 (E1–E4). |
+
+### Write protocol
+
+1. **Path**: `specs/issue-ISSUE_KEY-result.json`, relative to the repo root.
+   `specs/` is git-ignored, so the artifact is never committed.
+2. **Overwrite**: last-run-wins — overwrite the file on every exit; never append.
+3. **Atomic**: use the `write` tool with the complete JSON document in a single
+   call (no partial writes, no shell `echo` concatenation).
+4. **Write-before-stop**: write the file **immediately before** printing the
+   stop message, so the artifact exists even if the session dies mid-message.
+   On success (E17), write immediately after `gh pr create` returns the URL and
+   before the Step 9 report prints.
+5. **A failed write must not crash the pipeline**: if the write itself errors,
+   print `⚠️  Result file write failed: <error>. Continuing with the stop anyway.`
+   and proceed to the stop — the driver derives `no_result` from a missing file;
+   never abort mid-stop because of the artifact.
+
+### Standing rule
+
+Any current or future stop in `/letsgo` — including exits not enumerated as
+E1–E17 — MUST write `specs/issue-ISSUE_KEY-result.json` per this contract
+before ending, choosing the `stage` of the phase being exited and a `reason`
+that describes the stop. When adding a new exit point to this command, add its
+`Result hook` line in the same edit.
+
+---
+
 ## Step 0 — Parse arguments
 
 `$ARGUMENTS` contains a path to a light spec file, followed by optional flags
@@ -42,8 +107,11 @@ Extract:
   Normalization: strip a leading `origin/` from the value, so `--base origin/ai/integration`
   and `--base ai/integration` both resolve to the bare branch name `ai/integration`.
   Validation: if `--base` appears but there is no following token, or the next token
-  starts with `--`, print
-  `❌ --base requires a branch name (e.g. --base ai/integration).` and STOP
+  starts with `--`:
+  📄 **Result hook (E1):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+  per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+  `reason="--base requires a branch name"`.
+  Print `❌ --base requires a branch name (e.g. --base ai/integration).` and STOP
   immediately (hard stop — no interactive prompt, so this is headless-safe; do NOT
   consume the flag-like token as the branch name).
   Set **BASE_EFFECTIVE** = `BASE` if BASE is not null, else `default(origin/HEAD)`.
@@ -65,7 +133,11 @@ Run:
 ```bash
 gh issue view <ISSUE_NUMBER> --json number,title,body,url,state
 ```
-- If `gh` is not authenticated or the call fails, stop and print:
+- If `gh` is not authenticated or the call fails:
+📄 **Result hook (E2):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+`reason="Could not fetch GitHub issue"`.
+Stop and print:
 ```
 ❌ Could not fetch GitHub issue #<ISSUE_NUMBER>. Run `gh auth login` or verify the issue exists.
 ```
@@ -91,10 +163,19 @@ gh issue view <ISSUE_NUMBER> --json number,title,body,url,state
 ```
 Then proceed to Step 1.
 
-If the first token does NOT match `^[0-9]+$`, skip this step entirely and
-proceed to Step 1 with the existing FILE_PATH and ISSUE_KEY from Step 0.
+If the first token does NOT match `^[0-9]+$`, skip the detection/fetch/materialize
+sub-steps and continue with the existing FILE_PATH and ISSUE_KEY from Step 0.
 
-Verify FILE_PATH exists and is readable. If not, stop and print:
+## Step 0.5b — Verify spec file (common gate)
+
+This gate runs for both numeric (GitHub issue) and file-path arguments, after
+Step 0.5 has resolved FILE_PATH and ISSUE_KEY.
+
+Verify FILE_PATH exists and is readable. If not:
+📄 **Result hook (E3):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+`reason="File not found"` (use the first token of `$ARGUMENTS` as `issue` when numeric).
+Stop and print:
 ```
 ❌ File not found: <FILE_PATH>
 ```
@@ -117,8 +198,12 @@ BASE_BRANCH=<BASE>
 BASE_REF=origin/$BASE_BRANCH
 git fetch origin $BASE_BRANCH
 ```
-If the `git fetch` exits non-zero (e.g. `couldn't find remote ref`), print
-`❌ Remote branch origin/<BASE> not found (fetch failed). Stopping.` and STOP
+If the `git fetch` exits non-zero (e.g. `couldn't find remote ref`):
+📄 **Result hook (E4):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+`reason="Remote branch not found (fetch failed)"`, `branch=""` (FEATURE_BRANCH does
+not exist yet) and the `pipeline` key omitted (no counter initialised).
+Print `❌ Remote branch origin/<BASE> not found (fetch failed). Stopping.` and STOP
 before any implementation runs (hard stop — no interactive prompt, headless-safe).
 If the current branch equals BASE_BRANCH (i.e. already checked out on the base):
 ```bash
@@ -292,6 +377,9 @@ If HEADLESS is `true`, do NOT ask the user. Print:
 ⚠️  Spec for ISSUE_KEY still has open conflicts after MAX_SPEC_TURNS automated turns.
     Headless mode: stopping and marking as Blocked.
 ```
+📄 **Result hook (E5):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+`reason="Spec conflicts unresolved after MAX_SPEC_TURNS automated turns; headless stop (Blocked)"`.
 Call `mem_update` with:
 - `topic_key`: "pipeline/ISSUE_KEY/automated-spec-review"
 - `title`: "Headless Stop — Spec Conflicts for ISSUE_KEY"
@@ -363,6 +451,9 @@ Do NOT delete any files. Print:
 ⚠️  Spec for ISSUE_KEY was not approved. Stopping /letsgo.
     Files remain on disk as an audit trail under specs/.
 ```
+📄 **Result hook (E6):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+`reason="Spec was not approved (human rejection at Step 3c)"`.
 Stop the entire pipeline. Do not proceed to implementation, review, or PR creation.
 
 ---
@@ -469,6 +560,9 @@ If CRITICAL_COUNT > 0:
 ⚠️  ISSUE_KEY hit impl pass budget (MAX_IMPL_PASSES) with critical DoD failures.
     Headless mode: stopping and marking as Blocked.
 ```
+  📄 **Result hook (E7):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+  per §Step R — Result Contract with `outcome="stopped"`, `stage="dod"`,
+  `reason="Critical DoD failures after MAX_IMPL_PASSES passes; headless stop (Blocked)"`.
   Stop the entire pipeline.
 - Otherwise, stop and ask:
 ```
@@ -478,6 +572,11 @@ If CRITICAL_COUNT > 0:
 [C] Continue to test gate & code review anyway
 [S] Stop here
 ```
+If the user chose [S], write result.json per §Step R before printing the stop;
+if [C], do not write — continue.
+📄 **Result hook (E8):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="dod"`,
+`reason="User chose [S] after critical DoD failures (Step 5d)"`.
 If Stop, print `⚠️  Stopping /letsgo.` and end. If Continue, set DOD_CONTINUED = `true` and proceed to **Step 5b**.
 
 ---
@@ -486,7 +585,11 @@ If Stop, print `⚠️  Stopping /letsgo.` and end. If Continue, set DOD_CONTINU
 
 If MAKE_CI is `true`, look for a `make ci` target in the Makefile.
 If found, set TEST_COMMAND = `make ci`, TEST_SOURCE = "make ci", and run it.
-If not found, print `⚠️  --make-ci specified but no 'make ci' target found. Stopping.`
+If not found:
+📄 **Result hook (E9):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="tests"`,
+`reason="--make-ci specified but no 'make ci' target found"`.
+Print `⚠️  --make-ci specified but no 'make ci' target found. Stopping.`
 and stop the pipeline.
 
 Otherwise, look up the test command in this order (first match wins):
@@ -510,7 +613,11 @@ Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test ou
 If tests pass within budget, print `✅ Tests passed after N fix pass(es) (source: TEST_SOURCE).` Set TEST_RESULT = "passed-after-fix", proceed to **Step 6**.
 
 If tests still fail:
-- If STRICT_TESTS is `true`, print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Strict-tests mode: stopping.` and stop the pipeline.
+- If STRICT_TESTS is `true`:
+  📄 **Result hook (E10):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+  per §Step R — Result Contract with `outcome="stopped"`, `stage="tests"`,
+  `reason="Tests still failing after MAX_FIX_PASSES fix passes; strict-tests stop"`.
+  Print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Strict-tests mode: stopping.` and stop the pipeline.
 - Otherwise, print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Continuing to code review.` Set TEST_RESULT = "failed", proceed to **Step 6**.
 
 ---
@@ -645,6 +752,9 @@ Otherwise:
 ⚠️  ISSUE_KEY still has review findings after MAX_FIX_PASSES passes.
     Headless mode: stopping and marking as Needs Review.
 ```
+  📄 **Result hook (E12):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+  per §Step R — Result Contract with `outcome="stopped"`, `stage="review"`,
+  `reason="Review findings unresolved after MAX_FIX_PASSES passes; headless stop (Needs Review)"`.
   Stop the pipeline. Do NOT open a PR.
 - Otherwise, stop and ask:
 ```
@@ -654,6 +764,11 @@ FINAL_OUTPUT
 [C] Continue to PR creation anyway
 [S] Stop here
 ```
+If the user chose [S], write result.json per §Step R before printing the stop;
+if [C], do not write — continue.
+📄 **Result hook (E13):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="review"`,
+`reason="User chose [S] after unresolved review findings (Step 7e)"`.
 If Stop, print `⚠️  Stopping /letsgo.` and end. If Continue, set REVIEW_CONTINUED = `true` and proceed to **Step 8**.
 
 ---
@@ -672,7 +787,11 @@ Proceed to **Step 8**.
 If tests fail:
 - Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test output; re-run tests after each fix.
 - If tests pass within budget, print `✅ Post-review tests passed after N fix pass(es).` Set POST_REVIEW_TEST = "passed-after-fix", proceed to **Step 8**.
-- If STRICT_TESTS is `true` and tests still fail, print `⚠️  Post-review tests still failing. Strict-tests mode: stopping.` and stop the pipeline.
+- If STRICT_TESTS is `true` and tests still fail:
+  📄 **Result hook (E11):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+  per §Step R — Result Contract with `outcome="stopped"`, `stage="tests"` (the failing
+  gate is the test gate), `reason="Post-review tests still failing; strict-tests stop (Step 7.5)"`.
+  Print `⚠️  Post-review tests still failing. Strict-tests mode: stopping.` and stop the pipeline.
 - Otherwise, print `⚠️  Post-review tests still failing after fix passes. Continuing to PR creation (test result from Step 5b was green).` Set POST_REVIEW_TEST = "failed", proceed to **Step 8**.
 
 If TEST_RESULT was "failed" or "skipped" from Step 5b, skip this step.
@@ -744,7 +863,11 @@ If the working tree is clean, skip to 8d.
 
 1. Print the full list of changed files from `git status --short`.
 2. Scan for risk patterns: `.env`, `.env.*`, `*.pem`, `*.key`, `*credentials*`,
-   `*secret*`, `.DS_Store`. If any risk-pattern file appears, stop and print:
+   `*secret*`, `.DS_Store`. If any risk-pattern file appears:
+📄 **Result hook (E14):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="pr"`,
+`reason="Sensitive-file pattern matched before commit"`.
+Stop and print:
 ```
 ⚠️  <file> matches a sensitive-file pattern and is about to be committed.
     Remove it from the working tree or add it to .gitignore before re-running /letsgo.
@@ -764,6 +887,11 @@ If the working tree is clean, skip to 8d.
 4. If AUTO_COMMIT is `false` (`--no-auto-commit`) or thresholds exceeded: generate a commit message
    from the diff, print it with the file list (excluding `specs/`), and ask the user to confirm
    before running `git add -A -- ':!specs/' && git commit`.
+   If the user declines the confirmation:
+   📄 **Result hook (E15):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+   per §Step R — Result Contract with `outcome="stopped"`, `stage="pr"`,
+   `reason="Manual commit confirmation declined (Step 8c)"`.
+   Print `⚠️  Commit confirmation declined. Stopping /letsgo.` and stop the pipeline.
 
 ### 8d — Draft the PR description
 
@@ -831,7 +959,13 @@ Write it to `pr-description.md` in the repo root. Never commit this file.
   gh pr create --title "PR_TITLE" --body-file pr-description.md
   ```
 
-If `gh` is not authenticated, stop and tell the user to run `gh auth login`.
+If `gh pr create` fails for any reason (including auth):
+📄 **Result hook (E16):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="pr"`,
+`reason="gh pr create failed: not authenticated"` when the failure is an auth
+failure, else `reason="gh pr create failed: <error>"`, `pr_url=""`.
+Stop and tell the user to run `gh auth login` on an auth failure, or report the
+error otherwise.
 
 ### 8f — Clean up
 
@@ -843,6 +977,11 @@ rm pr-description.md
 
 ## Step 9 — Final report
 
+📄 **Result hook (E17):** on the success path, immediately after `gh pr create`
+returned the PR URL (Step 8e) and before printing this report, write
+`specs/issue-ISSUE_KEY-result.json` per §Step R — Result Contract with
+`outcome="pr_opened"`, `stage="pr"`, `reason="PR opened successfully"`,
+`branch=FEATURE_BRANCH`, and `pr_url` set to the URL gh returned.
 Print a summary of the whole run:
 ```
 🎉 /letsgo complete for ISSUE_KEY
@@ -855,6 +994,7 @@ Print a summary of the whole run:
   Branch:        <branch name>
   Base:          <BASE_EFFECTIVE — e.g. ai/integration, or default(origin/HEAD) when --base was omitted>
   PR:            <URL returned by gh pr create>
+  Result:        specs/issue-ISSUE_KEY-result.json (outcome=pr_opened, stage=pr)
 
 See specs/issue-ISSUE_KEY-progress.md for the full audit trail.
 ```
