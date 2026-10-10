@@ -725,12 +725,17 @@ CURRENT_BRANCH=$(git branch --show-current)
 If CURRENT_BRANCH equals the bare `BASE_BRANCH` name (compare against `BASE_BRANCH`,
 never `BASE_REF` — this holds in both modes: default and `--base`) (unexpected — should
 not happen), create it now:
-```bash
-FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
-git checkout -b $FEATURE_BRANCH
-```
-(When BASE is set, create it from the remote-tracking ref instead:
-`git checkout -b $FEATURE_BRANCH $BASE_REF`.)
+
+- **When BASE is set** (create from the remote-tracking ref):
+  ```bash
+  FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
+  git checkout -b $FEATURE_BRANCH $BASE_REF
+  ```
+- **When BASE is null** (default path — create from current HEAD):
+  ```bash
+  FEATURE_BRANCH="feat/ISSUE_KEY-$(date +%Y%m%d%H%M%S)"
+  git checkout -b $FEATURE_BRANCH
+  ```
 Otherwise, continue on the existing FEATURE_BRANCH.
 
 ### 8c — Review and commit changes
