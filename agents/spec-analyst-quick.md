@@ -2,7 +2,7 @@
 name: spec-analyst-quick
 description: Fast-path spec for bugs and minor changes (2 phases only). Triggered by /analyze-issue --quick. Read-only access to source files.
 mode: subagent
-model: opencode/qwen3.8-flash
+model: opencode/deepseek-v4.1-flash
 temperature: 0.2
 permission:
   edit: ask
