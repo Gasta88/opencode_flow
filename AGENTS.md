@@ -14,6 +14,8 @@ Light spec files can be created manually, or sourced from a GitHub issue by pass
 
 At project scope, `/brainstorm <notion-url>` is the front end: it turns a Notion project brief into an aligned vision and publishes the work as light GitHub issues on a Project board. Those issues then become the light specs that `/analyze-issue <N>` and `/letsgo <N>` consume. `/brainstorm` accepts a Notion URL only — it does not take a KEY, a file path, or an issue number.
 
+`/brainstorm` also routes every slice: it writes a `## Foundry fit` block (`Fit: yes|no`, `Why`, `Needs before Ready`, `Verification`) and sets the board status explicitly. `Ready` is reserved for slices that are `Fit: yes`, unblocked, have every `Needs before Ready` prerequisite satisfied, and were confirmed by the user; everything else goes to the board's intake status (`Backlog` if present, else `To Do`/`Todo`). Never set `Blocked` or `In Progress` at creation. Foundry-fit issue bodies must be self-contained — inline a short vision excerpt in `## Context`, because the Foundry sandbox cannot reach Engram.
+
 ## Rule 2 — Skill Loading
 
 Always load the `spec-driven-workflow` skill at the start of any session that
@@ -79,6 +81,11 @@ contracts (specs, decisions, commands, agents, skills).
 
 If Engram MCP is unavailable or returns an error, fall back to Markdown writes
 in `specs/issue-{KEY}-progress.md`. Log the error and continue — do not crash.
+
+Engram is best-effort, not a durable contract. In particular, Foundry-fit issue
+bodies must be self-contained: the Foundry sandbox cannot reach Engram today, so
+a headless `/letsgo` must be able to resolve the slice from the issue body, the
+codebase, and `decisions.md` alone.
 
 ### Scope conventions
 

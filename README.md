@@ -12,7 +12,7 @@ OpenCode Flow enforces a **spec-before-code** methodology. Instead of jumping st
 Specialized AI subagents: `spec-analyst` / `spec-analyst-quick` (spec generation), `spec-implementer` (implementation, red-green TDD at declared seams), `code-reviewer` (bugs axis) / `standards-reviewer` (standards axis) / `spec-fidelity-reviewer` (spec axis) / `code-review-filter` / `code-fixer` (three-axis review + remediation), `dod-evaluator` (DoD gate), `spec-conflict-checker` (pre-flight checks), `external-scout` (dependency docs).
 
 ### Commands (`commands/`)
-User-invokable workflows: `/brainstorm` (Notion brief → aligned vision → light GitHub issues on a Project board), `/analyze-issue` (spec generation, add `--quick` for minor changes), `/review-spec` (human approval gate, skipped for `--quick`), `/implement-spec` (task-graph implementation with parallel frontier waves via `--max-parallel`), `/implement-loop` (DoD-gated loop, full specs only), `/review-code` (three-axis review — bugs / standards / spec fidelity — + fix loop), `/create-pr` (structured PR: Summary visual, Evidence, Merge Danger), `/handover` (async handover doc), `/retro` (post-session environment audit), `/letsgo` (full pipeline end-to-end).
+User-invokable workflows: `/brainstorm` (Notion brief → aligned vision → light GitHub issues on a Project board, routed to the Foundry or the human lane), `/analyze-issue` (spec generation, add `--quick` for minor changes), `/review-spec` (human approval gate, skipped for `--quick`), `/implement-spec` (task-graph implementation with parallel frontier waves via `--max-parallel`), `/implement-loop` (DoD-gated loop, full specs only), `/review-code` (three-axis review — bugs / standards / spec fidelity — + fix loop), `/create-pr` (structured PR: Summary visual, Evidence, Merge Danger), `/handover` (async handover doc), `/retro` (post-session environment audit), `/letsgo` (full pipeline end-to-end).
 
 ### Skills (`skills/`)
 `spec-driven-workflow`: 3-file persistence pattern, spec lifecycle rules, decision escalation.
@@ -22,9 +22,9 @@ User-invokable workflows: `/brainstorm` (Notion brief → aligned vision → lig
 
 **Project pipeline (`/brainstorm`):**
 ```
-Notion brief → /brainstorm → grilling rounds → vertical slices → GitHub issues + Project board
+Notion brief → /brainstorm → grilling rounds → vertical slices → Foundry/human routing → GitHub issues + primed Project board
 ```
-Each issue is deliberately light — user story, goal, constraints, and acceptance criteria only. The deep specification is generated per issue later, on demand, by `/analyze-issue <N>` or `/letsgo <N>`.
+Each issue is deliberately light — user story, goal, constraints, acceptance criteria, and a `## Foundry fit` block only. `Ready` is reserved for slices that are Foundry-fit, unblocked, have all prerequisites met, and were confirmed by the user; every other slice starts in the board's intake status. The deep specification is generated per issue later, on demand, by `/analyze-issue <N>` or `/letsgo <N>`. Run `/letsgo` on human-lane issues; the Foundry picks up the `Ready` queue.
 
 **Manual pipeline:**
 ```
@@ -57,7 +57,7 @@ Every issue generates exactly three files in `specs/`:
 
 ### Notion Projects
 
-`/brainstorm <notion-url>` reads a Notion project brief, interviews you in rounds until the vision is unambiguous, breaks it into vertical slices, and publishes each slice as a light GitHub issue on a Project board — creating and linking the board if the repository has none. Requires the Notion MCP server and `gh auth login` with the `project` scope. The vision and its rationale persist to Engram; the command writes no files under `specs/`. Each issue stays light, so `/letsgo <N>` on any unblocked issue is the natural next step.
+`/brainstorm <notion-url>` reads a Notion project brief, interviews you in rounds until the vision is unambiguous, breaks it into vertical slices, routes each slice to the Foundry or the human lane, and publishes it as a light GitHub issue on a Project board — creating and linking the board if the repository has none. Requires the Notion MCP server and `gh auth login` with the `project` scope. The vision and its rationale persist to Engram when available; the command writes no files under `specs/`. Foundry-fit issues are self-contained (a short vision excerpt is inlined in `## Context`) because the Foundry sandbox cannot reach Engram. `Ready` is set only for confirmed, unblocked, `Fit: yes` slices; all others land in the intake status. Run `/letsgo <N>` on human-lane issues, and let the Foundry pick up the `Ready` queue.
 
 ### GitHub Issue Numbers
 

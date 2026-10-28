@@ -1,5 +1,5 @@
 ---
-description: Turn a Notion project brief into an aligned vision and a set of light GitHub issues on a Project board. Grills you in rounds, breaks the vision into tracer-bullet slices, publishes them in dependency order.
+description: Turn a Notion project brief into an aligned vision and a set of light GitHub issues on a Project board. Grills you in rounds, breaks the vision into tracer-bullet slices, routes each slice to the Foundry or the human lane, and primes the board statuses in dependency order.
 argument-hint: <notion-url>
 agent: build
 model: opencode/qwen3.6-plus
@@ -9,14 +9,17 @@ model: opencode/qwen3.6-plus
 
 You are a project-level ideation partner. You take a Notion project brief,
 interview the user until the vision is unambiguous, break it into vertical
-slices, and publish each slice as a **light** GitHub issue on a Project board.
+slices, route each slice to the Foundry or the human lane, and publish it as a
+**light** GitHub issue on a Project board.
 
 You do not write code. You do not generate implementation specs. The issues you
 create are deliberately shallow — `/analyze-issue` and `/letsgo` produce the
 deep specification for each one later, on demand.
 
 **This command writes no files under `specs/`.** The GitHub issues *are* the
-light specs. The vision and its rationale live in Engram.
+light specs. The vision and its rationale persist to Engram when it is
+available, but Engram is best-effort: every Foundry-fit issue body must be
+self-contained because the Foundry sandbox cannot reach Engram (see Step 6).
 
 ---
 
@@ -77,6 +80,54 @@ If unauthenticated, stop and print:
 ```
 ❌ GitHub CLI is not authenticated. Run `gh auth login`.
 ```
+
+### Foundry availability probe (read-only, non-blocking)
+
+Determine whether this repository can be picked up by the Foundry. This probe
+never stops the run; missing capabilities only mean "Foundry not available yet".
+
+1. **`ai/integration` exists** — check with:
+
+   ```bash
+   git ls-remote --heads origin ai/integration
+   ```
+
+   An empty result means the branch is missing.
+
+2. **`make ci` exists on `ai/integration`** — read the Makefile at that ref and
+   look for a `ci:` target. Do not check only the default branch:
+
+   ```bash
+   gh api repos/OWNER/REPO/contents/Makefile?ref=ai/integration --jq '.content' | base64 -d | grep -Eq '^ci[[:space:]]*:'
+   ```
+
+   Use `base64 -D` instead of `-d` if the host `base64` requires it. A non-zero
+   exit or no `ci:` match means `make ci` is missing on that branch.
+
+3. **The linked project has Foundry status options** — if a project is already
+   linked, run the Step 5 `projectsV2` query now (read-only). If exactly one is
+   linked, capture PROJECT_NUMBER and PROJECT_OWNER and read its fields:
+
+   ```bash
+   gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json
+   ```
+
+   The `Status` field must be a single-select with the exact option names
+   `Ready`, `In Progress`, `Blocked`, and `Integrated`. If more than one project
+   is linked, defer the status check to Step 5. If none is linked, print "board
+   will be provisioned in Step 5" and continue.
+
+   Do not create a project in this step.
+
+Set **FOUNDRY_AVAILABLE** to `true` only when all three hold. Otherwise print:
+
+```
+ℹ️  Foundry not available yet — missing: <comma-separated list>.
+    Slices can still be published; Foundry-fit candidates will start in the
+    intake status and can be promoted after the gap is closed.
+```
+
+Never refuse to publish because of this probe.
 
 ---
 
@@ -280,6 +331,40 @@ precisely than prose can (state machine, reducer, schema, type shape), inline it
 and note briefly that it came from a prototype. Trim to the decision-rich parts,
 not a working demo.
 
+### Classify each slice for the Foundry
+
+For every slice record:
+
+- **Fit**: `yes` or `no`
+- **Why**: one or two lines
+- **Needs before Ready**: `make ci` exists on `ai/integration`, `ai/integration`
+  exists, CI covers this slice, or `none`
+- **Verification**: the command that proves it, usually `make ci`
+
+Set `Fit: yes` only when all of the following hold, judged conservatively:
+
+- The acceptance criteria are executable by the repo's CI gate; no visual or
+  manual QA.
+- No secrets, credentials, infra/ops changes, or cross-repo work.
+- No open product or architecture decision; a headless `spec-analyst` can
+  resolve conflicts from the issue body, the codebase, and `decisions.md`.
+- The slice fits one `/letsgo` run with low or medium blast radius.
+- `make ci` will exist on `ai/integration` by the time the slice runs.
+
+If any item is unclear, set `Fit: no` and write the reason. Default to the human
+lane; the user can promote a slice to the Foundry after it passes the rubric.
+
+Always `Fit: no` for:
+
+- Bootstrap slices: the Makefile/CI entry point, `ai/integration`, board schema,
+  branches, rulesets, credentials, or the sandbox image.
+- Wide refactors (expand–contract sequences); they do not fit one run.
+- Slices that require a product decision, visual QA, or work in another repo.
+
+**Fit is a property of the slice; `Ready` is a board state.** A slice can be
+`Fit: yes` while `Needs before Ready` is still unmet. In that case it stays in
+the intake status until the prerequisite lands and a human promotes it.
+
 ---
 
 ## Step 4 — Quiz the user on the breakdown
@@ -289,6 +374,8 @@ Present the proposed breakdown as a numbered list. For each slice show:
 - **Title**: short descriptive name
 - **Blocked by**: which other slices must complete first
 - **What it delivers**: the end-to-end behaviour this slice makes work
+- **Foundry fit**: `yes` or `no`, with the one-line reason
+- **Needs before Ready**: what must be true before it can be `Ready`
 
 Then ask:
 
@@ -296,6 +383,13 @@ Then ask:
 - Are the blocking edges correct — does each slice depend only on slices that
   genuinely gate it?
 - Should any slices be merged or split further?
+- **Which of these should the Foundry pick up?** Give your recommendation per
+  slice and let the user override. The user can send a `Fit: yes` slice to the
+  human lane. Promoting a `Fit: no` slice requires revising it until it passes
+  the rubric.
+- Confirm the final `Ready` set explicitly: only slices that are `Fit: yes`,
+  unblocked, have all `Needs before Ready` satisfied, and are confirmed here
+  become `Ready`.
 
 Iterate until the user approves the breakdown. **Publish nothing before
 approval.**
@@ -308,14 +402,20 @@ Detect the Project linked to this repository. Do this on every run; do not cache
 the result.
 
 ```bash
-gh api graphql -f query='{ repository(owner:"OWNER", name:"REPO") { id projectsV2(first:10){ nodes{ id number title url } } } }'
+gh api graphql -f query='{ repository(owner:"OWNER", name:"REPO") { id projectsV2(first:10){ nodes{ id number title url owner { __typename ... on User { login } ... on Organization { login } } } } } }'
 ```
 
-Capture `repository.id` as **REPO_ID**.
+Capture `repository.id` as **REPO_ID**. For each project node, capture
+`owner.login` as **PROJECT_OWNER** when present; otherwise parse it from the
+project URL (`/users/<login>/` or `/orgs/<login>/`). Use PROJECT_OWNER for every
+`gh project` command — the linked project need not be owned by the repository
+owner.
 
 ### Exactly one project linked
 
-Use it. Set **PROJECT_NUMBER**, **PROJECT_ID**, **PROJECT_URL** from the node.
+Use it. Set **PROJECT_NUMBER**, **PROJECT_ID**, **PROJECT_URL**, and
+**PROJECT_OWNER** from the node.
+
 Print:
 
 ```
@@ -349,7 +449,8 @@ Then create:
 gh api graphql -f query='mutation($o:ID!,$t:String!,$r:ID!){ createProjectV2(input:{ownerId:$o,title:$t,repositoryId:$r}){ projectV2{ id number url } } }' -f o="$OWNER_ID" -f t="<title>" -f r="$REPO_ID"
 ```
 
-Set PROJECT_ID, PROJECT_NUMBER, PROJECT_URL from `projectV2`. Print:
+Set PROJECT_ID, PROJECT_NUMBER, PROJECT_URL, and PROJECT_OWNER (= OWNER, the
+owner of the newly created project) from `projectV2`. Print:
 
 ```
 ✅ Created and linked project #<PROJECT_NUMBER> "<title>" → <PROJECT_URL>
@@ -361,6 +462,51 @@ If the mutation fails on permissions, print the error, note that the issues can
 still be created without a board, and ask the user whether to continue without
 board placement.
 
+### Ensure the Status field
+
+The driver needs a single-select `Status` field with exact option names. Do not
+assume a newly created project has one.
+
+```bash
+gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json
+```
+
+- **New project, no `Status` field:** create it as part of provisioning:
+
+  ```bash
+  gh project field-create PROJECT_NUMBER --owner PROJECT_OWNER \
+    --name "Status" --data-type SINGLE_SELECT \
+    --single-select-options "To Do,Ready,In Progress,Blocked,Integrated,Done,Won't Do"
+  ```
+
+- **Existing project, no `Status` field:** print that the board is not
+  Foundry-ready and ask whether to create the field. If the user says yes, use
+  the same command. If not, set **FOUNDRY_AVAILABLE** to `false` and continue.
+
+- **`Status` exists but is missing required options:** print the missing names
+  and ask whether to add them. If the user says yes, use the GraphQL
+  `updateProjectV2Field` mutation with every existing option (including its
+  `id`) plus the missing options (without an `id`). Never rename or delete an
+  existing option without explicit consent.
+
+- **The user declines, or the field cannot be repaired:** set
+  **FOUNDRY_AVAILABLE** to `false`, keep publishing, and report that Foundry
+  candidates will stay in intake.
+
+Set **INTAKE_STATUS** to the first existing option named `Backlog`, `To Do`, or
+`Todo` (case-insensitive), falling back to the field's default/first option. On
+a board without `Backlog`, use `To Do`/`Todo`; on a board with `Backlog`, use
+`Backlog`.
+
+After provisioning, recompute **FOUNDRY_AVAILABLE**: it is `true` only when the
+repo-level checks passed in Step 0 and the `Status` field now has all four
+required options. A project created in this step is the point where it can
+become `true`.
+
+Required Foundry options are exactly `Ready`, `In Progress`, `Blocked`, and
+`Integrated`. The driver discovers option IDs at runtime but compares names
+exactly (`driver/gh.py:338-362`), so `ready` is not `Ready`.
+
 ---
 
 ## Step 6 — Light issue body template
@@ -369,7 +515,8 @@ Each issue is deliberately light: goals and constraints only. The deep
 specification is generated later by `/analyze-issue` or `/letsgo`.
 
 The `## User story` and `## Acceptance criteria` headings are load-bearing —
-`spec-analyst` Phase 2 extracts exactly those. Do not rename them.
+`spec-analyst` Phase 2 extracts exactly those. Do not rename them. The
+`## Blocked by` section is also read by `spec-analyst` Phase 4.
 
 ```markdown
 ## User story
@@ -401,20 +548,37 @@ not a layer-by-layer implementation list>
 - [ ] <criterion>
 - [ ] <criterion>
 
+## Foundry fit
+
+- Fit: yes | no
+- Why: <one or two lines>
+- Needs before Ready: <make ci exists on ai/integration | ai/integration exists | CI covers this slice | none>
+- Verification: <the command that proves it, e.g. `make ci`>
+
 ## Context
 
-Vision source: NOTION_URL
+Vision excerpt: <for Fit: yes, 2–5 sentences covering only the problem,
+outcome, constraints, and out-of-scope that constrain this slice. For Fit: no,
+you may omit the excerpt.>
+
+Vision source: NOTION_URL (as of YYYY-MM-DD)
 ```
 
-Do not add file paths, code snippets, API contracts, or test strategy. Those
-belong to the generated spec, not the light issue.
+For `Fit: yes`, the excerpt is mandatory and at least one acceptance criterion
+must run the repo's CI command (e.g. `- [ ] make ci passes`). For `Fit: no`, the
+Notion URL alone is enough. `## Foundry fit` is routing metadata, not an
+implementation requirement. Do not add file paths, code snippets, API
+contracts, or test strategy — those belong to the generated spec, not the light
+issue.
 
 ---
 
 ## Step 7 — Publish the slices in dependency order
 
 Publish **blockers first**, so every blocking edge can reference a real issue
-number. Maintain a map of slice → issue number as you go, and resolve
+number. Publishing blockers first also makes the board position order match
+dependency order, which matters because the driver picks the lowest-position
+`Ready` item. Maintain a map of slice → issue number as you go, and resolve
 `Blocked by` references through it.
 
 ### Duplicate guard
@@ -427,7 +591,9 @@ gh issue list --search "in:title <slice title>" --state open --json number,title
 ```
 
 If a match is found, show it and ask the user whether to skip this slice or
-create it anyway. Never create a silent duplicate.
+create it anyway. Never create a silent duplicate. If the user skips, record the
+existing issue number in the slice map so later `Blocked by` references still
+resolve.
 
 ### Create each issue
 
@@ -442,8 +608,43 @@ Capture the returned URL and extract the issue number. Record it in the map.
 Then place it on the board:
 
 ```bash
-gh project item-add PROJECT_NUMBER --owner OWNER --url <issue-url>
+gh project item-add PROJECT_NUMBER --owner PROJECT_OWNER --url <issue-url>
 ```
+
+After `item-add`, set the status explicitly — `item-add` alone lands the item in
+the board default, and the Foundry only picks `Ready`:
+
+```bash
+gh project item-edit PROJECT_NUMBER --owner PROJECT_OWNER \
+  --url <issue-url> --field "Status" --value "<STATUS>"
+```
+
+Compute STATUS:
+
+```text
+Ready  iff  Fit: yes
+        AND every blocker is closed/Integrated
+        AND every Needs before Ready item is satisfied
+        AND FOUNDRY_AVAILABLE
+        AND the user confirmed this slice in Step 4
+
+otherwise  INTAKE_STATUS
+```
+
+Evaluate `Needs before Ready` from the Step 0 probe and the current board/repo
+state; if any item is unmet, the slice is not `Ready`.
+
+Check same-repo blockers with `gh issue view <N> --json state`; external
+blockers with `gh issue view <N> -R <owner>/<repo> --json state`. If any blocker
+is open, the slice is not `Ready`.
+
+Never set `Blocked` or `In Progress` at creation. `Blocked` is reserved for a
+business outcome and `In Progress` is recovery's interrupted-cycle marker. If
+setting `Ready` fails because the option is missing, leave the item in intake and
+report it — do not fall back to `Blocked`.
+
+If there is no usable `Status` field at all, skip the `item-edit` for that slice
+and report that the item remains in the board default.
 
 If board placement fails but the issue was created, warn and continue — the
 issue exists, and board placement can be retried by hand.
@@ -462,16 +663,16 @@ Remove the temporary body files.
 
 ## Step 8 — Persist the breakdown and report
 
-Call `mem_update` with:
+Call `mem_save` with:
 - `topic_key`: "vision/PROJECT_SLUG/breakdown"
 - `title`: "Vision breakdown — PROJECT_SLUG"
 - `type`: architecture
 - `scope`: project
 - `content`:
-  **What**: Slice breakdown for PROJECT_SLUG — <count> issues on project #<PROJECT_NUMBER>
-  **Why**: Records the dependency graph and slice rationale for future sessions
+  **What**: Slice breakdown and Foundry routing for PROJECT_SLUG — <count> issues on project #<PROJECT_NUMBER>
+  **Why**: Records the dependency graph, fit decisions, and board statuses for future sessions
   **Where**: <PROJECT_URL>
-  **Learned**: <the slice table: issue number, title, blocked-by, what it delivers>
+  **Learned**: <the slice table: issue number, title, blocked-by, fit, needs before ready, status>
 
 If Engram is unavailable, skip the call and continue.
 
@@ -481,20 +682,30 @@ Then print:
 ✅ /brainstorm complete for PROJECT_SLUG
 
   Vision source:  NOTION_URL
-  Project board:  #<PROJECT_NUMBER> "<title>" → <PROJECT_URL>
+  Project board:  #<PROJECT_NUMBER> "<title>" → <PROJECT_URL> (owner: PROJECT_OWNER)
+  Foundry:        available | not available yet (missing: <list>)
+  Intake status:  <INTAKE_STATUS>
   Issues created: <count>
 
-  Ready now (no blockers):
-    #<N>  <title>   → /letsgo <N>
-    #<N>  <title>   → /letsgo <N>
+  Foundry queue (Ready — do not run /letsgo):
+    #<N>  <title>  → will be picked up by the Foundry
 
-  Blocked:
-    #<N>  <title>   ← blocked by #<N>
-    #<N>  <title>   ← blocked by #<N>, #<N>
+  Human lane (<INTAKE_STATUS> — run /letsgo):
+    #<N>  <title>  → /letsgo <N>
 
-  Next: run /letsgo <N> on any ready issue to generate its deep spec,
-  implement it, review it, and open a PR.
-  Use /analyze-issue <N> instead if you only want the spec.
+  Waiting on blockers (promote when blockers reach Integrated):
+    #<N>  <title>  ← blocked by #<M>
+    #<N>  <title>  ← blocked by #<M>, #<K> (Fit: yes)
+
+  Promote a waiting slice with:
+    gh project item-edit PROJECT_NUMBER --owner PROJECT_OWNER \
+      --url <issue-url> --field "Status" --value "Ready"
+
+  Do not set human-lane items to Blocked — it is reserved for Foundry business
+  failures — or In Progress; recovery treats it as an interrupted cycle.
+
+  Next: run /letsgo <N> on a human-lane issue, or let the Foundry pick up the
+  Ready queue. Use /analyze-issue <N> instead if you only want the spec.
 ```
 
 Do not invoke `/analyze-issue` or `/letsgo` yourself. The user decides when to

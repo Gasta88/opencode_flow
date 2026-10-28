@@ -38,7 +38,7 @@ Never analyse what you have not read. Fetch raw data into `findings.md` before d
 
 No code is written without a spec. Every change begins as a light spec, is analyzed via `/analyze-issue`, and produces a structured `issue-{KEY}-spec.md` before `/implement-spec` or `/implement-loop` is invoked.
 
-A light spec is either a file under `specs/` or a GitHub issue. `/brainstorm` publishes light specs as GitHub issues; `/analyze-issue <N>` materializes issue `N` into `specs/{N}.md` before analyzing it.
+A light spec is either a file under `specs/` or a GitHub issue. `/brainstorm` publishes light specs as GitHub issues and routes each one to the Foundry or the human lane; `/analyze-issue <N>` materializes issue `N` into `specs/{N}.md` before analyzing it.
 
 ### 4. Spec as anchor
 
@@ -87,7 +87,7 @@ Do not create `specs/decisions.md`. Do not use `DEC-NNN` identifiers. The repo-r
 |---------|-----------|--------------|
 | `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) |
 | `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) |
-| `/brainstorm <notion-url>` | `opencode/qwen3.6-plus` | — (inline; human-in-the-loop, cannot be delegated to a subagent) |
+| `/brainstorm <notion-url>` | `opencode/qwen3.6-plus` | — (inline; human-in-the-loop, cannot be delegated to a subagent; routes slices to Foundry/human and primes board statuses) |
 | `/implement-spec <KEY> [--max-parallel N]` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus; parallel frontier waves when N > 1) |
 | `/review-spec <KEY> [--visual]` | `opencode/qwen3.6-plus` | `@spec-analyst` (on revision) |
 | `/review-code [--max-fix-passes N] [--spec KEY]` | `opencode/qwen3.5-plus` | `@code-reviewer` + `@standards-reviewer` + `@spec-fidelity-reviewer` (parallel) → `@code-review-filter` → `@code-fixer` / `@spec-implementer` |
@@ -202,7 +202,7 @@ If Engram MCP tools are unavailable or return an error:
 
 ### Markdown Files That Remain
 
-`/brainstorm` is the exception: it writes no Markdown at all. Its vision, settled decisions, and slice breakdown live in Engram only, and its durable artifacts are the GitHub issues it publishes.
+`/brainstorm` is the exception: it writes no Markdown at all. Its vision, settled decisions, and slice breakdown persist to Engram when available, but Engram is best-effort; its durable artifacts are the GitHub issues it publishes. Foundry-fit issue bodies are self-contained, because the Foundry sandbox cannot reach Engram.
 
 These files are NOT replaced by Engram (they need git history and reviewability):
 - `specs/issue-{KEY}-findings.md` — raw light spec data
