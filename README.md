@@ -37,6 +37,8 @@ Light Spec → /analyze-issue → [spec files] → /review-spec → /implement-s
 ```
 A human is only interrupted when automation cannot resolve something — unresolved spec conflicts, critical DoD failures, or residual review findings. See `commands/letsgo.md` for details.
 
+**Foundry mode (`/letsgo <N> --headless --base <branch> [--quick] [--merge-mode auto|direct]`):** when BOTH `--headless` and `--base` are present, `/letsgo` runs the Code Foundry lifecycle end-to-end: a fail-closed preflight on the live issue body (`## Foundry fit` must say `Fit: yes`; `## Blocked by` refs resolve against GitHub state or same-repo board `Integrated`), a Project board claim (`In Progress`) before any branch/commit/push, a `feat/<N>-<14-digit-timestamp>` branch from `origin/<base>` with resume-detection (never a second PR), a draft-PR mutex created before the first implementation commit, scan-before-every-push checkpoint pushes (never force), and a land path that updates the PR body, marks it ready, and merges with exactly one strategy (`--merge-mode auto` arms `--auto --merge`; `direct` runs `--merge`). Every exit writes the frozen-schema `result.json` and upserts a single `<!-- opencode-flow:result -->` marker comment; any post-mutex stop closes the PR and marks the issue `Blocked`. The board's `Integrated` status and merge truth belong to the host reconciler. Verify with `bash tests/verify-letsgo-foundry.sh && bash tests/verify-letsgo-base.sh && bash tests/verify-letsgo-result.sh`.
+
 ## The 3-File Pattern
 
 Every issue generates exactly three files in `specs/`:

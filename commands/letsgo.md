@@ -1,6 +1,6 @@
 ---
 description: Run the full pipeline end-to-end — analyze, auto-resolve spec conflicts, implement, review along three axes (bugs/standards/spec), remediate, and open a PR.
-argument-hint: <path-to-light-spec> [--quick] [--headless] [--base <branch>] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N] [--strict-tests] [--no-strict-tests] [--make-ci] [--spec-confidence N]
+argument-hint: <path-to-light-spec> [--quick] [--headless] [--base <branch>] [--merge-mode <auto|direct>] [--max-spec-turns N] [--max-impl-passes N] [--max-fix-passes N] [--auto-commit] [--no-auto-commit] [--risk-budget N] [--strict-tests] [--no-strict-tests] [--make-ci] [--spec-confidence N]
 agent: build
 model: opencode/qwen3.6-plus
 ---
@@ -77,6 +77,49 @@ before ending, choosing the `stage` of the phase being exited and a `reason`
 that describes the stop. When adding a new exit point to this command, add its
 `Result hook` line in the same edit.
 
+### Comment mirror (C11) — exactly one result comment (Foundry mode)
+
+In Foundry mode every exit upserts a single issue comment carrying the marker
+line `<!-- opencode-flow:result -->` (AC7). The comment body is written to
+`result-comment.md`: marker line first, then `outcome`, `stage`, `reason`,
+`branch`, `pr_url` and the run timestamp. Find-then-PATCH, else create:
+
+```bash
+timeout 120 gh api "repos/<OWNER>/<REPO>/issues/<N>/comments" --jq '.[] | select(.body | contains("<!-- opencode-flow:result -->")) | .id'
+```
+- Found ⇒ update (the `-X PATCH` stays explicit — payload params alone would
+  silently switch the method to POST):
+```bash
+timeout 120 gh api "repos/<OWNER>/<REPO>/issues/comments/<ID>" -X PATCH -F body=@result-comment.md
+```
+- Not found ⇒ create:
+```bash
+timeout 120 gh api "repos/<OWNER>/<REPO>/issues/<N>/comments" -F body=@result-comment.md
+```
+
+`-F` with `@` reads the file (verified for gh 2.98.0 in `specs/issue-13-extdocs.md`).
+Token hygiene (AC9): no token value ever appears in argv, stdout, `result.json`,
+comments, or files — rely on ambient `gh auth` only. Delete `result-comment.md`
+after the upsert; it is never committed.
+
+### Foundry hooks (E18–E23, E17-F) — registered per the standing rule
+
+Enumeration extension only — the schema above is unchanged. Each hook's full
+`Result hook` line lives at its exit point; this table is the registration.
+
+| Hook | Exit | outcome | stage | reason | Extra Foundry actions |
+|------|------|---------|-------|--------|------------------------|
+| E18 | `--merge-mode` invalid (Step 0) | `stopped` | `spec` | `--merge-mode requires auto or direct` | none (pre-board) |
+| E19 | Preflight fail (Step 0.6) | `stopped` | `spec` | preflight failure — see the Step 0.6 exit contract | comment; `Blocked` iff board reachable |
+| E20 | Board claim fail (Step 0.7) | `stopped` | `spec` | claim write error — see Step 0.7 | comment; no branch/PR exists |
+| E21 | Branch safety stop (Step 0.1-F) | `stopped` | `spec` | branch safety — see Step 0.1-F | comment; `Blocked` |
+| E22 | Mutex fail (Step 0.8) | `stopped` | `pr` | mutex failure — see Step 0.8 | close PR iff created; `Blocked`; comment |
+| E23 | Land fail (Step 8e-L) | `stopped` | `pr` | land failure — see Step 8e-L | close PR + `Blocked` (OD1); comment |
+| E17-F | Success (Step 8e-L complete) | `pr_opened` | `pr` | `PR opened successfully` | board left `In Progress`; comment; `pr_url` = existing PR URL |
+
+Existing E1–E16 keep their declared values verbatim; every post-mutex stop
+additionally executes the Foundry Stop Protocol.
+
 ---
 
 ## Step 0 — Parse arguments
@@ -117,6 +160,24 @@ Extract:
   Set **BASE_EFFECTIVE** = `BASE` if BASE is not null, else `default(origin/HEAD)`.
   BASE is resolved once here and in Step 0.1 into `BASE_BRANCH`/`BASE_REF` for the
   steps that follow (0.1, 6, 7d, 8b, 8b.5, 8e, 9).
+- **MERGE_MODE**: the token immediately after `--merge-mode` if present, else `auto`.
+  Valid values: `auto`, `direct`. Validation: if `--merge-mode` appears but there is
+  no following token, or the next token starts with `--`, or the value is neither
+  `auto` nor `direct`:
+  📄 **Result hook (E18):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+  per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+  `reason="--merge-mode requires auto or direct"`, `branch=""` (FEATURE_BRANCH does
+  not exist yet) and the `pipeline` key omitted (no counter initialised).
+  Print `❌ --merge-mode requires auto or direct (e.g. --merge-mode auto).` and STOP
+  immediately (hard stop — no interactive prompt, so this is headless-safe; do NOT
+  consume the flag-like token as the mode value).
+- **FOUNDRY_MODE**: `true` if and only if HEADLESS is `true` AND BASE is not `null`
+  (i.e. both `--headless` and `--base <branch>` are present); `false` otherwise.
+  Foundry mode activates Steps 0.6/0.7/0.1-F/0.8, the Push Protocol, the Step 8e-L
+  land path, and the Foundry Stop Protocol. Any other combination takes the existing
+  interactive path, byte-for-byte unchanged.
+- **QUICK × FOUNDRY**: `--quick` remains allowed in Foundry mode; it only skips the
+  spec review gate — that semantics is unchanged (FR14).
 
 ## Step 0.5 — GitHub issue detection & materialize
 
@@ -182,8 +243,123 @@ Stop and print:
 
 Print banner:
 ```
-🚀 /letsgo issue-ISSUE_KEY | quick=QUICK_MODE headless=HEADLESS base=BASE_EFFECTIVE spec-turns=MAX_SPEC_TURNS impl-passes=MAX_IMPL_PASSES fix-passes=MAX_FIX_PASSES auto-commit=AUTO_COMMIT risk-budget=RISK_BUDGET strict-tests=STRICT_TESTS make-ci=MAKE_CI spec-confidence=SPEC_CONFIDENCE
+🚀 /letsgo issue-ISSUE_KEY | quick=QUICK_MODE headless=HEADLESS base=BASE_EFFECTIVE foundry=FOUNDRY_MODE merge-mode=MERGE_MODE spec-turns=MAX_SPEC_TURNS impl-passes=MAX_IMPL_PASSES fix-passes=MAX_FIX_PASSES auto-commit=AUTO_COMMIT risk-budget=RISK_BUDGET strict-tests=STRICT_TESTS make-ci=MAKE_CI spec-confidence=SPEC_CONFIDENCE
 ```
+
+## Step 0.6 — Foundry preflight (fail closed)
+
+Runs ONLY when FOUNDRY_MODE is `true` — after the Step 0.5b banner, before Step 0.1.
+No write of any kind (no branch, no commit, no push, no board write, no spec work)
+happens until this preflight passes. Every violation exits through one contract:
+
+📄 **Result hook (E19):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+`reason="Foundry preflight failed: <specific>"` (substitute the specific cause),
+`branch=""`, `pr_url=""`, and the `pipeline` key omitted (no counter initialised) —
+then run the Foundry Stop Protocol (pre-mutex variant: no PR exists, so no close
+is attempted).
+
+**Live body (OD3):** parse the LIVE GitHub issue body, never the possibly-stale
+materialized file (Step 0.5's "exists → use as-is"):
+```bash
+timeout 120 gh issue view <ISSUE_NUMBER> --json body --jq '.body'
+```
+If ISSUE_NUMBER is unset (a file-path argument under FOUNDRY_MODE), or the call
+fails or times out ⇒ E19 (live-body read failure).
+
+**Project discovery (C1):** resolve the board from the repo:
+```bash
+timeout 120 gh api graphql -f query='{ repository(owner:"<OWNER>", name:"<REPO>") { id projectsV2(first:10){ nodes{ id number title url owner { __typename ... on User { login } ... on Organization { login } } } } } }'
+```
+**Exactly one** project node must resolve — zero or two-or-more ⇒ E19 (fail closed
+before any write; when no board resolves, no `Blocked` write is attempted). Set
+**PROJECT_NUMBER** from the node `number` and **PROJECT_OWNER** from the node
+`owner.login`, falling back to parsing the project `url` when login is null.
+
+**Field precheck (C2):**
+```bash
+timeout 120 gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json
+```
+`Status` must be a single-select field containing the exact option names
+`In Progress` and `Blocked` (plus readable `Ready` and `Integrated`). The Foundry
+cannot ask, so it fails: any missing field or option ⇒ E19. This step never creates or renames options
+(contrast: `/brainstorm` provisions interactively).
+
+**Foundry fit:** the live body must contain a `## Foundry fit` section with the
+exact line `Fit: yes` (2026-10-28 /brainstorm contract). A missing section or
+`Fit: no` ⇒ E19.
+
+**Blocked by:** parse the `## Blocked by` section. The accepted ref grammar is ONLY
+same-repo `#<N>` and external `OWNER/REPO#<N>` list refs (`- #<N> — <title>` /
+`- OWNER/REPO#<N> — <title>`); anything else — a bare `N`, a URL, `ISSUE-123`
+style — fails closed ⇒ E19. The line `None — can start immediately` means no
+blockers ⇒ pass. Resolve each ref:
+
+- **C3 GitHub state:**
+```bash
+timeout 120 gh issue view <M> --json state
+timeout 120 gh issue view <M> -R <OWNER>/<REPO> --json state
+```
+  Pass ⇔ state is `CLOSED` (or `MERGED` where the ref resolves to a merged PR).
+- **C4 board Status (same-repo OPEN refs only):** the `Integrated` escape hatch is
+  same-repo only — an external OPEN ref always fails. Read the blocker item's
+  Status via the GraphQL single-select value node (canonical per
+  `specs/issue-13-extdocs.md` — the `item-list --field` JSON key shape is
+  unreliable, so the GraphQL value node is authoritative):
+```bash
+timeout 120 gh api graphql -f query='{ repository(owner:"<OWNER>", name:"<REPO>") { issue(number: <M>) { projectItems(first: 20) { nodes { fieldValues(first: 20) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } } } } } } } } }'
+```
+  Pass ⇔ a node with `field.name == "Status"` and `name == "Integrated"` (exact, case-sensitive).
+  Any other value, zero Status nodes, or a query error ⇒ E19.
+
+An unresolved blocker ref ⇒ E19. C13 bounds: every call above is wrapped
+`timeout 120`; a timeout is treated as that command's failure ⇒ E19, no blind retry.
+
+## Step 0.7 — Board claim (In Progress)
+
+Runs ONLY when FOUNDRY_MODE is `true`, immediately after Step 0.6 passes and
+before Step 0.1 — the claim is written before the first `git checkout -b`, commit, or push (AC2).
+Write (C5):
+```bash
+timeout 120 gh project item-edit PROJECT_NUMBER --owner PROJECT_OWNER --url <issue-url> --field "Status" --value "In Progress"
+```
+The value is exactly `In Progress` (case-sensitive, per the exact option names the
+C2 precheck verified). **Never write `Ready` or `Integrated`** — `Ready` is
+/brainstorm-owned and `Integrated` is the host reconciler's; `Blocked` is written
+only by the Foundry Stop Protocol below.
+
+On write error or timeout ⇒ 📄 **Result hook (E20):** before this stop, write
+`specs/issue-ISSUE_KEY-result.json` per §Step R — Result Contract with
+`outcome="stopped"`, `stage="spec"`, `reason="Board claim failed: <error>"`,
+`branch=""`, `pr_url=""`, `pipeline` omitted — then the Foundry Stop Protocol
+(the protocol's `Blocked` attempt still runs where the board is reachable).
+
+## Foundry Stop Protocol (single definition)
+
+Every Foundry-mode stop from Step 0.6 onward executes this protocol, in order.
+It is defined once here and referenced by each stop — stops do NOT restate it:
+
+1. **Result file** — write `specs/issue-ISSUE_KEY-result.json` per the stop's own
+   `Result hook` line (§Step R — Result Contract), before any message prints.
+2. **Comment mirror** — upsert the single result marker comment on the issue per
+   C11 (§Step R — Comment mirror): find the comment containing the marker, PATCH
+   it if found, else create it — exactly one marker comment per issue, never a
+   duplicate (AC7).
+3. **Close the PR if one exists** — `timeout 120 gh pr close "$PR_NUMBER"`, and
+   only when the mutex PR exists (Step 0.8 onward). Pre-mutex stops (E19/E20/E21)
+   skip this — no PR exists yet.
+4. **Board release** — set the item to `Blocked` (C6):
+   `timeout 120 gh project item-edit PROJECT_NUMBER --owner PROJECT_OWNER --url <issue-url> --field "Status" --value "Blocked"`.
+   When PROJECT_NUMBER/PROJECT_OWNER were never resolved (discovery failed) or the
+   write itself fails, record the error and continue — never abort mid-stop.
+5. **Stop message** — print the distinct Foundry anchor: post-mutex stops print
+   `Foundry mode: stopping, closing the draft PR and marking the issue as Blocked.`;
+   pre-mutex stops print `Foundry mode: stopping and marking the issue as Blocked.`
+   — then STOP. In Foundry mode these strings replace the interactive/headless
+   stop shapes; the frozen anchors keep their existing occurrence counts.
+
+The board is left `In Progress` on success — `/letsgo` never writes `Integrated`
+(the reconciler observes the merge and owns that transition).
 
 ### Step 0.1 — Create feature branch up front
 
@@ -214,6 +390,34 @@ Print `✅ Created feature branch $FEATURE_BRANCH from origin/$BASE_BRANCH.`
 If already on a different non-base branch, use it as-is and set FEATURE_BRANCH to
 the current branch name — `BASE_REF` still points at `origin/<BASE>` for later steps.
 
+**Step 0.1-F — Foundry branch variant (FOUNDRY_MODE only).** When FOUNDRY_MODE is
+`true`, this variant OVERRIDES the reuse sentence above — a non-base branch is
+never reused. After the fetch above, take `CURRENT_BRANCH=$(git branch --show-current)`:
+
+- CURRENT_BRANCH equals BASE_BRANCH → create from the remote-tracking ref:
+```bash
+FEATURE_BRANCH="feat/<N>-$(date +%Y%m%d%H%M%S)"
+git checkout -b $FEATURE_BRANCH $BASE_REF
+```
+  `<N>` is ISSUE_NUMBER (Foundry invocations are always numeric). Verify AC3
+  immediately: `git merge-base HEAD $BASE_REF` must equal `$(git rev-parse $BASE_REF)`;
+  a mismatch ⇒ E21.
+- CURRENT_BRANCH is not BASE_BRANCH → run RESUME_CHECK — never reuse it:
+```bash
+gh pr list --state open --json number,url,headRefName,isDraft --jq '[.[] | select(.headRefName | test("^feat/<N>-[0-9]{14}$"))]'
+```
+  Exactly 1 match ⇒ adopt its `headRefName` as FEATURE_BRANCH and its `number`/`url`
+  as PR_NUMBER/PR_URL, then check out the tracking branch
+  (`timeout 120 git fetch origin $FEATURE_BRANCH && timeout 120 git checkout $FEATURE_BRANCH`);
+  Step 0.8 is skipped — the PR already exists and FR10 forbids a second one.
+  0 or ≥2 matches ⇒ E21 fail-closed (never pick one).
+
+📄 **Result hook (E21):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
+`reason="Branch safety stop: non-base branch not reused / resume ambiguity"`,
+`branch=""` (or FEATURE_BRANCH when the create path ran), `pr_url=""`, `pipeline`
+omitted — then the Foundry Stop Protocol (pre-mutex: comment + `Blocked`; no close).
+
 **When BASE is null** (default path — behavior unchanged):
 Determine the base branch:
 ```bash
@@ -232,6 +436,61 @@ Print `✅ Created feature branch $FEATURE_BRANCH from origin/$BASE_BRANCH.`
 If already on a non-default branch, use it as-is and set FEATURE_BRANCH to the current branch name.
 
 Store BASE_BRANCH, BASE_REF and FEATURE_BRANCH as variables for later steps.
+
+## Step 0.8 — Draft-PR mutex (Foundry concurrency lock)
+
+Runs ONLY when FOUNDRY_MODE is `true`, immediately after Step 0.1-F and before Step 0.25.
+This is the concurrency lock — the draft PR exists before any implementation commit (AC4).
+Skipped entirely on a resumed run whose PR already exists (Step 0.1-F adopted one) —
+never open a second PR (FR10).
+
+Write `pr-mutex-body.md` in the repo root with the placeholder body
+`Foundry run in progress — pipeline results land here` (the final body arrives at
+Step 8e-L; the file is deleted right after the create call and never committed), then:
+
+```bash
+git commit --allow-empty -m "chore(letsgo): reserve PR mutex for issue <N>"
+```
+Run the C10 pre-push scan (Push Protocol, next section) — a sensitive-pattern match
+blocks the push — then push and create the draft:
+```bash
+timeout 120 git push -u origin "$FEATURE_BRANCH"
+gh pr create --draft --base "$BASE_BRANCH" --title "ISSUE_KEY: <short summary>" --body-file pr-mutex-body.md
+```
+Capture **PR_URL** and **PR_NUMBER** from the create output. The create call takes
+only the bare `$BASE_BRANCH` value — the two-variable split of decision 2026-10-10
+applies: git plumbing consumes `$BASE_REF`; the gh surface never does.
+
+On empty-commit failure, C10 scan match, push rejection, create failure, or a
+timeout ⇒ 📄 **Result hook (E22):** before this stop, write
+`specs/issue-ISSUE_KEY-result.json` per §Step R — Result Contract with
+`outcome="stopped"`, `stage="pr"`, `reason="Draft-PR mutex failed: <error>"`,
+`branch=FEATURE_BRANCH`, `pr_url=""` unless the PR was already created, `pipeline`
+omitted — then the Foundry Stop Protocol (close the PR iff it was created; `Blocked`).
+
+## Push Protocol (Foundry mode)
+
+The `/letsgo` governor owns every `git push` — dispatched subagents commit only
+(see the push-governance rule in `agents/spec-implementer.md`).
+
+- **Checkpoint pushes (C9):** `timeout 120 git push origin "$FEATURE_BRANCH"` runs
+  after each commit-producing stage: Step 5 pass end, Step 5b fix-loop end (if it
+  committed), Step 7d fix pass end, Step 7.5 fix-loop end, Step 8c final commit.
+  Checkpoints are per-stage, not per-commit.
+- **No force-push:** force-push in any form is forbidden everywhere in `/letsgo`.
+  A rejected non-force push means another writer holds the branch — treat it as that
+  stage's failure (mutex stage ⇒ E22; later stages ⇒ their own hook) and run the
+  Foundry Stop Protocol. Never retry with a forced push.
+- **Scan-before-every-push (C10):** before EVERY push — the mutex push and each
+  checkpoint — check staged and working-tree paths against the sensitive patterns
+  `.env*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `.DS_Store` via
+  `git status --short` and `git diff --cached --name-only`. A match ⇒ stop at the
+  current stage with `reason="Sensitive-file pattern matched before push"`, then the
+  Foundry Stop Protocol (close PR + `Blocked` post-mutex).
+- **Timeout bounds (C13):** every git/gh network call in Foundry mode is wrapped
+  `timeout 120 ...` (hosts without GNU coreutils use `gtimeout 120 ...` — see
+  `specs/issue-13-extdocs.md`); a timeout is that command's failure ⇒ its hook + the
+  Foundry Stop Protocol, never a blind retry.
 
 ### Step 0.25 — Trivial-change detection
 
@@ -380,6 +639,7 @@ If HEADLESS is `true`, do NOT ask the user. Print:
 📄 **Result hook (E5):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
 per §Step R — Result Contract with `outcome="stopped"`, `stage="spec"`,
 `reason="Spec conflicts unresolved after MAX_SPEC_TURNS automated turns; headless stop (Blocked)"`.
+If FOUNDRY_MODE is `true`, run the Foundry Stop Protocol after this hook (close the PR + `Blocked`).
 Call `mem_update` with:
 - `topic_key`: "pipeline/ISSUE_KEY/automated-spec-review"
 - `title`: "Headless Stop — Spec Conflicts for ISSUE_KEY"
@@ -533,6 +793,7 @@ If DOD_VERDICT == "PASS", print:
 ✅ Implementation complete for ISSUE_KEY (pass IMPL_PASS-1/MAX_IMPL_PASSES). All DoD items satisfied.
 ```
 and proceed to **Step 5b** (test gate).
+If FOUNDRY_MODE is `true`, run the C9 checkpoint push before proceeding.
 
 If DOD_VERDICT == "FAIL" after MAX_IMPL_PASSES passes, classify failures: **critical** (core functionality, security, data integrity) vs **non-critical** (edge cases, docs, naming, non-core gaps). Count CRITICAL_COUNT.
 
@@ -563,6 +824,7 @@ If CRITICAL_COUNT > 0:
   📄 **Result hook (E7):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
   per §Step R — Result Contract with `outcome="stopped"`, `stage="dod"`,
   `reason="Critical DoD failures after MAX_IMPL_PASSES passes; headless stop (Blocked)"`.
+  If FOUNDRY_MODE is `true`, run the Foundry Stop Protocol after this hook (close the PR + `Blocked`).
   Stop the entire pipeline.
 - Otherwise, stop and ask:
 ```
@@ -611,12 +873,14 @@ Print `✅ Tests passed (source: TEST_SOURCE).` Set TEST_RESULT = "passed", proc
 Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test output; fall back to `@spec-implementer` if spec context needed (its prompt inherits the `debugging-and-error-recovery` skill — the fix must follow the diagnosis phases, not guess). Re-run tests after each fix.
 
 If tests pass within budget, print `✅ Tests passed after N fix pass(es) (source: TEST_SOURCE).` Set TEST_RESULT = "passed-after-fix", proceed to **Step 6**.
+If FOUNDRY_MODE is `true` and the fix loop committed, run the C9 checkpoint push before Step 6.
 
 If tests still fail:
 - If STRICT_TESTS is `true`:
   📄 **Result hook (E10):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
   per §Step R — Result Contract with `outcome="stopped"`, `stage="tests"`,
   `reason="Tests still failing after MAX_FIX_PASSES fix passes; strict-tests stop"`.
+  If FOUNDRY_MODE is `true`, run the Foundry Stop Protocol after this hook (close the PR + `Blocked`).
   Print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Strict-tests mode: stopping.` and stop the pipeline.
 - Otherwise, print `⚠️  Tests still failing after MAX_FIX_PASSES fix passes. Continuing to code review.` Set TEST_RESULT = "failed", proceed to **Step 6**.
 
@@ -713,6 +977,7 @@ If ISSUES_REMAIN and FIX_PASS < MAX_FIX_PASSES, route findings by axis:
   spec context → invoke `@spec-implementer` with:
   > Address spec-fidelity review findings for **ISSUE_KEY**. Spec: `specs/issue-ISSUE_KEY-spec.md`. Findings: <spec findings from FINAL_OUTPUT>. Re-check against spec before resolving. Track progress.
 
+If FOUNDRY_MODE is `true`, run the C9 checkpoint push after the fix pass commits.
 Re-collect the diff (same commands as Step 6) before looping back to 7a, since
 the fix pass changed it.
 
@@ -755,6 +1020,7 @@ Otherwise:
   📄 **Result hook (E12):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
   per §Step R — Result Contract with `outcome="stopped"`, `stage="review"`,
   `reason="Review findings unresolved after MAX_FIX_PASSES passes; headless stop (Needs Review)"`.
+  If FOUNDRY_MODE is `true`, run the Foundry Stop Protocol after this hook (close the PR + `Blocked`).
   Stop the pipeline. Do NOT open a PR.
 - Otherwise, stop and ask:
 ```
@@ -787,10 +1053,12 @@ Proceed to **Step 8**.
 If tests fail:
 - Run a bounded fix loop (up to MAX_FIX_PASSES): invoke `@code-fixer` with test output; re-run tests after each fix.
 - If tests pass within budget, print `✅ Post-review tests passed after N fix pass(es).` Set POST_REVIEW_TEST = "passed-after-fix", proceed to **Step 8**.
+  If FOUNDRY_MODE is `true`, run the C9 checkpoint push after the fix loop commits.
 - If STRICT_TESTS is `true` and tests still fail:
   📄 **Result hook (E11):** before this stop, write `specs/issue-ISSUE_KEY-result.json`
   per §Step R — Result Contract with `outcome="stopped"`, `stage="tests"` (the failing
   gate is the test gate), `reason="Post-review tests still failing; strict-tests stop (Step 7.5)"`.
+  If FOUNDRY_MODE is `true`, run the Foundry Stop Protocol after this hook (close the PR + `Blocked`).
   Print `⚠️  Post-review tests still failing. Strict-tests mode: stopping.` and stop the pipeline.
 - Otherwise, print `⚠️  Post-review tests still failing after fix passes. Continuing to PR creation (test result from Step 5b was green).` Set POST_REVIEW_TEST = "failed", proceed to **Step 8**.
 
@@ -872,6 +1140,7 @@ Stop and print:
 ⚠️  <file> matches a sensitive-file pattern and is about to be committed.
     Remove it from the working tree or add it to .gitignore before re-running /letsgo.
 ```
+If FOUNDRY_MODE is `true`, run the Foundry Stop Protocol after this hook (close the PR + `Blocked`).
 3. If AUTO_COMMIT is `true` and no risk patterns detected:
    - Count the total changed files and total lines changed (additions + deletions).
      Exclude files under `specs/` from the count (spec artefacts are tracked separately).
@@ -881,9 +1150,11 @@ Stop and print:
     Manual confirmation required.
 ```
      Then fall through to step 4 (manual confirmation).
-   - Otherwise, generate a commit message from the diff and run
-     `git add -A -- ':!specs/' && git commit -m "<message>"` without asking.
-     Print `✅ Committed automatically (auto-commit on by default).`
+    - Otherwise, generate a commit message from the diff and run
+      `git add -A -- ':!specs/' && git commit -m "<message>"` without asking.
+      Print `✅ Committed automatically (auto-commit on by default).`
+      If FOUNDRY_MODE is `true`, run the C9 checkpoint push (the C10 scan already
+      ran at step 2 above).
 4. If AUTO_COMMIT is `false` (`--no-auto-commit`) or thresholds exceeded: generate a commit message
    from the diff, print it with the file list (excluding `specs/`), and ask the user to confirm
    before running `git add -A -- ':!specs/' && git commit`.
@@ -948,6 +1219,8 @@ Write it to `pr-description.md` in the repo root. Never commit this file.
 
 ### 8e — Create the PR
 
+- **When FOUNDRY_MODE is `true`** — skip the create calls below: the mutex PR from
+  Step 0.8 is the PR; proceed to Step 8e-L.
 - **When BASE is set** (pass the bare branch name — gh resolves the PR target
   server-side; never pass `origin/<base>` or `$BASE_REF` to gh here):
   ```bash
@@ -964,8 +1237,47 @@ If `gh pr create` fails for any reason (including auth):
 per §Step R — Result Contract with `outcome="stopped"`, `stage="pr"`,
 `reason="gh pr create failed: not authenticated"` when the failure is an auth
 failure, else `reason="gh pr create failed: <error>"`, `pr_url=""`.
+If FOUNDRY_MODE is `true`, run the Foundry Stop Protocol after this hook (close the PR + `Blocked`).
 Stop and tell the user to run `gh auth login` on an auth failure, or report the
 error otherwise.
+
+### 8e-L — Foundry land path (FOUNDRY_MODE only)
+
+Runs ONLY when FOUNDRY_MODE is `true`, after Step 8d has written `pr-description.md`
+and Step 8c has committed and checkpoint-pushed. The mutex PR is the PR — this step
+lands it. Order: update body → conditional ready → exactly one merge strategy.
+
+1. Update the PR body:
+```bash
+timeout 120 gh pr edit "$PR_NUMBER" --body-file pr-description.md
+```
+2. Make ready only when the PR is still a draft — OD2: a resumed run may find it
+   already non-draft (crash after a previous `ready`), so the step is guarded, not
+   assumed:
+```bash
+[ "$(timeout 120 gh pr view "$PR_NUMBER" --json isDraft --jq '.isDraft')" = "true" ] && timeout 120 gh pr ready "$PR_NUMBER"
+```
+3. Merge with exactly one strategy, chosen by MERGE_MODE — never compose the squash
+   or rebase variants, never retry a failed merge with a different strategy:
+   - `--merge-mode auto` (default): `timeout 120 gh pr merge "$PR_NUMBER" --auto --merge`
+   - `--merge-mode direct`: `timeout 120 gh pr merge "$PR_NUMBER" --merge`
+
+The board stays `In Progress` — the host reconciler owns `Integrated` and merge
+truth; `/letsgo` never writes either. Never add a `Closes: #N` trailer to any PR
+body (merges target the base branch, not the default branch).
+
+On any edit / ready / merge failure or timeout ⇒ 📄 **Result hook (E23):** before
+this stop, write `specs/issue-ISSUE_KEY-result.json` per §Step R — Result Contract
+with `outcome="stopped"`, `stage="pr"`, `reason="Land failed: <error>"`,
+`branch=FEATURE_BRANCH`, `pr_url=PR_URL` — then the Foundry Stop Protocol:
+close the PR (OD1 — a lingering open PR holds the mutex, even a ready one) and
+set `Blocked`.
+
+On success ⇒ 📄 **Result hook (E17-F):** write `specs/issue-ISSUE_KEY-result.json`
+per §Step R — Result Contract with `outcome="pr_opened"`, `stage="pr"`,
+`reason="PR opened successfully"`, `branch=FEATURE_BRANCH`, `pr_url=PR_URL` (the
+existing mutex PR URL — no new PR was created) — then print the Step 9 report.
+`/letsgo` reports the PR it opened and armed; it never claims a merge.
 
 ### 8f — Clean up
 
@@ -982,6 +1294,9 @@ returned the PR URL (Step 8e) and before printing this report, write
 `specs/issue-ISSUE_KEY-result.json` per §Step R — Result Contract with
 `outcome="pr_opened"`, `stage="pr"`, `reason="PR opened successfully"`,
 `branch=FEATURE_BRANCH`, and `pr_url` set to the URL gh returned.
+When FOUNDRY_MODE is `true`, the E17-F hook (Step 8e-L) has already written the
+result file with the mutex PR URL — no second create happened; print the report
+below plus the Foundry line.
 Print a summary of the whole run:
 ```
 🎉 /letsgo complete for ISSUE_KEY
@@ -995,6 +1310,7 @@ Print a summary of the whole run:
   Base:          <BASE_EFFECTIVE — e.g. ai/integration, or default(origin/HEAD) when --base was omitted>
   PR:            <URL returned by gh pr create>
   Result:        specs/issue-ISSUE_KEY-result.json (outcome=pr_opened, stage=pr)
+  Foundry: preflight=passed claim=In Progress mutex=<PR_URL or resumed> land=<armed | direct> (Foundry runs only)
 
 See specs/issue-ISSUE_KEY-progress.md for the full audit trail.
 ```

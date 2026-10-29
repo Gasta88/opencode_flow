@@ -164,6 +164,15 @@ After 2 consecutive failures on the same action: change approach using the
 - After 3 consecutive failures on the same test despite following the
   debugging skill, escalate to the user with a summary of what was attempted.
 
+### 7. Push governance (Foundry mode)
+
+When running inside `/letsgo` Foundry mode, the implementer commits but never pushes:
+the `/letsgo` governor owns every `git push` — the draft-PR mutex push and all
+pipeline checkpoint pushes (see the Push Protocol in `commands/letsgo.md`). Do not
+run any push yourself; commit locally and let the governor checkpoint-push after
+each stage. Outside `/letsgo` (standalone `/implement-spec` or `/implement-loop`)
+this rule does not apply and the normal git workflow is unchanged.
+
 ---
 
 ## Definition of Done gate
