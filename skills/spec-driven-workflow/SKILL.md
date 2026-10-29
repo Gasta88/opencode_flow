@@ -1,6 +1,6 @@
 ---
 name: spec-driven-workflow
-description: Use when working with light spec files, generating specs, or implementing from spec files. Defines the 3-file persistence pattern, the spec lifecycle commands, Core Rules, and loop governance.
+description: Use when analyzing light specs or implementing/reviewing from specs — 3-file pattern, commands, loop rules.
 ---
 
 # Spec-Driven Workflow
@@ -27,8 +27,7 @@ A phase checkbox in `progress.md` is **not complete** unless it carries an `Evid
 
 Evidence takes one of these forms:
 - Test command + result: `Evidence: pytest tests/ — 14 passed`
-- Run-log excerpt: `Evidence: npm run build — compiled successfully, 0 errors`
-- Explicit negative: `Evidence: no verification possible because no test runner is configured`
+- Run-log excerpt or explicit negative (verification impossible)
 
 ### 2. Data before analysis
 
@@ -83,140 +82,56 @@ Do not create `specs/decisions.md`. Do not use `DEC-NNN` identifiers. The repo-r
 
 ## Commands
 
-| Command | Dispatcher | Delegates to |
-|---------|-----------|--------------|
-| `/analyze-issue <path>` | `opencode/qwen3.5-plus` | `@spec-analyst` (qwen3.6-plus) |
-| `/analyze-issue <path> --quick` | `opencode/qwen3.5-plus` | `@spec-analyst-quick` (qwen3.5-plus) |
-| `/brainstorm <notion-url>` | `opencode/qwen3.6-plus` | — (inline; human-in-the-loop, cannot be delegated to a subagent; routes slices to Foundry/human and primes board statuses) |
-| `/implement-spec <KEY> [--max-parallel N]` | `opencode/qwen3.5-plus` | `@spec-implementer` (qwen3.6-plus; parallel frontier waves when N > 1) |
-| `/review-spec <KEY> [--visual]` | `opencode/qwen3.6-plus` | `@spec-analyst` (on revision) |
-| `/review-code [--max-fix-passes N] [--spec KEY]` | `opencode/qwen3.5-plus` | `@code-reviewer` + `@standards-reviewer` + `@spec-fidelity-reviewer` (parallel) → `@code-review-filter` → `@code-fixer` / `@spec-implementer` |
-| `/implement-loop <KEY> [--max-passes N]` | `opencode/qwen3.5-plus` | `@spec-implementer` + `@dod-evaluator` |
-| `/create-pr "<title>"` | `opencode/qwen3.5-plus` | — (inline) |
-| `/handover` | `opencode/qwen3.6-plus` | — (inline) |
-| `/retro [<session or KEY>]` | `opencode/qwen3.6-plus` | — (inline) |
-| `/letsgo <path> [--quick] [--headless] [...]` | `opencode/qwen3.6-plus` | all above, chained |
-
----
-
-## Subagents
-
-| Agent | Mode | Role |
-|-------|------|------|
-| `spec-analyst` | subagent | Full 6-phase spec generation |
-| `spec-analyst-quick` | subagent | 2-phase compact spec |
-| `spec-implementer` | subagent | Implements from spec, tracks progress |
-| `code-fixer` | subagent (hidden) | Surgical fixer — applies review findings |
-| `code-reviewer` | subagent (hidden) | Adversarial diff review — bugs axis |
-| `standards-reviewer` | subagent (hidden) | Documented repo standards + Fowler smell baseline — standards axis |
-| `spec-fidelity-reviewer` | subagent (hidden) | Spec fidelity: missing requirements, scope creep, spec drift — spec axis |
-| `code-review-filter` | subagent (hidden) | Filters reviewer findings (per-axis, never reranks across axes) |
-| `dod-evaluator` | subagent (hidden) | Binary PASS/FAIL on DoD items |
-| `spec-conflict-checker` | subagent (hidden) | CLEAR/CONFLICTS verdict on spec vs decisions.md + codebase |
-| `external-scout` | subagent (hidden) | Fetches current docs for external dependencies |
-
----
+| Command | Delegates to |
+|---------|--------------|
+| `/analyze-issue <path> [--quick]` | `@spec-analyst` / `@spec-analyst-quick` |
+| `/brainstorm <notion-url>` | inline (human-in-the-loop; routes slices to Foundry/human) |
+| `/implement-spec <KEY> [--max-parallel N]` | `@spec-implementer` (parallel frontier waves when N > 1) |
+| `/review-spec <KEY> [--visual]` | `@spec-analyst` (on revision) |
+| `/review-code [...]` | `@code-reviewer` + `@standards-reviewer` + `@spec-fidelity-reviewer` → `@code-review-filter` → `@code-fixer` / `@spec-implementer` |
+| `/implement-loop <KEY> [--max-passes N]` | `@spec-implementer` + `@dod-evaluator` |
+| `/create-pr`, `/handover`, `/retro` | inline |
+| `/letsgo <path> [...]` | all above, chained |
 
 ## Loop governance
 
-OpenCode does not have Claude-Code-style Stop hooks or `/goal`.
-Loop behaviour is enforced via:
-
-**Prompt-level:**
-- `spec-implementer` follows the spec as the single source of truth.
-- `spec-implementer` works each sub-task as a red-green TDD loop at the seams
-  declared in the spec's Test Strategy (fallbacks for quick-mode specs and
-  missing test runners are defined in its prompt).
-- `spec-implementer` blocks completion until every DoD checkbox is satisfied.
-
-**Loop-level (`/implement-loop` only):**
-- `dod-evaluator` provides independent PASS/FAIL verdicts after each implementer pass.
-- The dispatcher re-enters `spec-implementer` with targeted failure context until PASS or budget exhausted.
-
-**Loop-level (`/letsgo` only):** three independent bounded loops, chained:
-- Spec-conflict loop: `spec-conflict-checker` gives CLEAR/CONFLICTS verdicts;
-  `spec-analyst` revises on CONFLICTS, up to `--max-spec-turns` (default 3).
-  Unresolved after budget → falls through to the same human approve/request-changes/reject
-  gate `/review-spec` uses, since automation cannot force-close a genuine
-  ambiguity. Under `--headless`, unresolved conflicts stop the pipeline and mark the issue as Blocked.
-- Implementation loop: identical to `/implement-loop`'s, budget `--max-impl-passes`
-  (default 3). Unresolved after budget → asks the human whether to continue or stop.
-  Under `--headless`, critical DoD failures stop the pipeline.
-- Code-review remediation loop: three parallel reviewers (`code-reviewer` —
-  bugs axis; `standards-reviewer` — standards axis; `spec-fidelity-reviewer` —
-  spec axis) produce findings; `code-review-filter` filters per-axis (never
-  reranking across axes); `code-fixer` applies bugs/standards findings,
-  `spec-implementer` applies spec-fidelity findings; re-review until clean or
-  `--max-fix-passes` (default 3). Unresolved after budget → asks the human
-  whether to continue or stop. Under `--headless`, residual findings stop the pipeline (no PR opened).
-
-**Frontier-wave dispatch (`/implement-spec` only):** with `--max-parallel N`
-(default 2), the Implementation Plan's `Depends On` column is treated as a task
-graph; up to N sub-tasks on the ready frontier whose declared `Files` sets are
-pairwise disjoint run as concurrent `spec-implementer` dispatches per wave.
-`/implement-loop` and `/letsgo` remain strictly sequential (their DoD and fix
-loops assume a single implementer).
-
-**Test gate (`/letsgo` only):** Runs after implementation, before code review.
-With `--strict-tests` (default under `--headless`), test failures after the fix budget stop the pipeline (no PR opened). Without it, failures are logged but the pipeline continues. A post-review test re-run catches regressions from code-fixer changes before PR creation.
-
-For event-driven enforcement on every tool call, implement an OpenCode plugin
-using `tool.execute.before` / `tool.execute.after` — see https://opencode.ai/docs/plugins/
+- `spec-implementer`: spec is source of truth; red-green at declared seams; blocks completion until every DoD checkbox passes.
+- `/implement-loop`: `dod-evaluator` PASS/FAIL after each pass; re-enter with failure context until PASS or budget.
+- `/letsgo` spec-conflict loop: `spec-conflict-checker` → `spec-analyst` revision, `--max-spec-turns` (3); unresolved → human gate (headless: stop, Blocked).
+- `/letsgo` implementation loop: as `/implement-loop`, `--max-impl-passes` (3); unresolved → ask human (headless: stop on critical DoD failure).
+- `/letsgo` review loop: three parallel reviewers → `code-review-filter` (per-axis, no rerank) → `code-fixer` (bugs/standards) / `spec-implementer` (spec), `--max-fix-passes` (3); unresolved → ask human (headless: stop, no PR).
+- `/implement-spec --max-parallel N`: ready-frontier waves of pairwise-disjoint `Files` sets; `/implement-loop` and `/letsgo` stay sequential.
+- Test gate (`/letsgo`): after implementation, before review; `--strict-tests` (default headless) stops on failure, else logs; post-review re-run catches regressions.
 
 ---
 
 ## Progress Tracking: Engram (Primary) + Markdown (Fallback)
 
-Agents use Engram MCP tools for progress tracking by default, falling back to
-Markdown files when Engram is unavailable.
+Use Engram for progress; if it errors, log and continue with `specs/issue-{KEY}-progress.md` using the same checkboxes and `Evidence:` lines.
 
 ### Topic Key Convention
 
-Every `topic_key` must carry a namespace prefix to prevent collisions — ISSUE_KEY for issue-scoped work, PROJECT_SLUG for `/brainstorm` vision work:
+Every `topic_key` carries a namespace prefix — ISSUE_KEY for issue work, PROJECT_SLUG for `/brainstorm`:
 
 | Pattern | topic_key example | Scope |
 |---------|-------------------|-------|
-| Vision source (raw Notion brief) | `vision/my-project/source` | project |
-| Vision decisions (grilling outcome) | `vision/my-project/decisions` | project |
-| Vision slice breakdown | `vision/my-project/breakdown` | project |
-| Implementation progress | `impl/FEAT-123/progress` | project |
-| Test cycles | `impl/FEAT-123/test-cycles` | project |
-| Errors | `impl/FEAT-123/errors` | project |
+| Vision source / decisions / breakdown | `vision/my-project/{source,decisions,breakdown}` | project |
+| Implementation progress / test cycles / errors | `impl/FEAT-123/{progress,test-cycles,errors}` | project |
 | Loop passes | `loop/FEAT-123/passes` | project |
 | Pipeline audit trail | `pipeline/FEAT-123/<stage>` | project |
 | Human review | `review/FEAT-123/human-approval` | project |
 | Cross-issue decisions | `decision/FEAT-123/<slug>` | global |
 
-### Scope Conventions
+Scopes: `project` (default), `global` (cross-issue decisions), `personal` (rare).
 
-- `project` (default): Issue-specific progress, test results, errors, review logs
-- `global`: Cross-issue decisions that benefit other teams or sessions
-- `personal`: User preferences or agent-specific conventions (rarely used)
+### Markdown files that remain
 
-### Fallback Behavior
+Git-tracked contracts: `specs/issue-{KEY}-{findings,spec,progress,extdocs}.md` and `decisions.md`.
 
-If Engram MCP tools are unavailable or return an error:
-1. Log the error and continue (do not crash)
-2. Fall back to Markdown writes in `specs/issue-{KEY}-progress.md`
-3. Use the same structure (checkboxes, evidence lines, tables) as before
-
-### Markdown Files That Remain
-
-`/brainstorm` is the exception: it writes no Markdown at all. Its vision, settled decisions, and slice breakdown persist to Engram when available, but Engram is best-effort; its durable artifacts are the GitHub issues it publishes. Foundry-fit issue bodies are self-contained, because the Foundry sandbox cannot reach Engram.
-
-These files are NOT replaced by Engram (they need git history and reviewability):
-- `specs/issue-{KEY}-findings.md` — raw light spec data
-- `specs/issue-{KEY}-spec.md` — implementation contract
-- `specs/issue-{KEY}-progress.md` — fallback when Engram unavailable
-- `decisions.md` — git source of truth (Engram mirrors with `scope: global`)
-- `specs/issue-{KEY}-extdocs.md` — external dependency docs
+`/brainstorm` writes no Markdown: its durable artifacts are the GitHub issues it publishes. Foundry-fit issue bodies are self-contained because the sandbox cannot reach Engram.
 
 ---
 
 ## Cross-Issue Knowledge: decisions.md
 
-`decisions.md` persists architectural rulings across issues. Read before drafting specs (AGENTS.md Rule 3).
-
-`spec-analyst` writes a decision entry after Phase 6 only if the spec introduces a repo-wide or cross-feature decision. `spec-analyst-quick` never writes decisions.
-
-When writing a decision, also call `mem_save` with `scope: global` and a `topic_key` like `decision/ISSUE_KEY/<slug>` for cross-project searchability. The file remains the git source of truth; Engram provides search and compaction resilience.
+Read `decisions.md` before drafting specs (AGENTS.md Rule 3). `spec-analyst` writes an entry after Phase 6 only for repo-wide/cross-feature decisions; `spec-analyst-quick` never writes. Also `mem_save` with `scope: global` and `topic_key: decision/ISSUE_KEY/<slug>` — the file remains the git source of truth.

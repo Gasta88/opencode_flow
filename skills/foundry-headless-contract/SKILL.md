@@ -1,23 +1,21 @@
 ---
 name: foundry-headless-contract
-description: Shared Foundry surface for headless commands — F1 project discovery, F2 status write, F3 result-comment upsert, F4 gh allowlist, runbook
+description: Shared Foundry surface for headless commands — board/result-comment contract.
 ---
 
 # Foundry Headless Contract
 
 ## Scope + Load Contract
 
-This skill defines the **single canonical surface** for Foundry board writes and result-comment upserts used by headless commands (`/letsgo --headless --base`, and `/review-pr` when it exists).
+Single canonical surface for Foundry board writes and result-comment upserts used by headless commands (`/letsgo --headless --base`, and `/review-pr`).
 
-**Load line (AC1):** Every command file that performs board or result-comment writes MUST begin its Foundry prose with exactly:
+**Load line:** every command that performs board or result-comment writes begins its Foundry prose with exactly:
 
 ```
 Load skill: foundry-headless-contract
 ```
 
-**Consumer contract:** Commands reference operations F1–F4 by name; they contain no duplicated inline `gh project` recipe strings (verified by static harness assertions).
-
-**Fail-closed discipline:** All operations fail closed on ambiguity. No operation mutates the board schema (no field-create, no option rename, no new Status options).
+Commands reference operations F1–F4 by name; no inline `gh project` recipes. All operations fail closed on ambiguity and never mutate the board schema.
 
 ---
 
@@ -130,9 +128,9 @@ permission:
     "gh api *": allow
 ```
 
-**Note:** `gh api *` is required because F1/F3 execute through `gh api` (findings' three-family list omitted it — allowlist-gap ruling in Requirements).
+**Note:** `gh api *` is required because F1/F3 execute through `gh api`.
 
-**Static check:** The four patterns pinned verbatim in the skill; no `ask`-gated `gh` pattern on the headless path (AC5).
+**Static check:** The four patterns pinned verbatim; no `ask`-gated `gh` pattern on the headless path.
 
 ---
 
@@ -142,16 +140,14 @@ permission:
 
 | Write | Owner | Notes |
 |-------|-------|-------|
-| `Status` = `In Progress` | Command lifecycle via F2 | Written by `/letsgo` before first implementation commit |
-| `Status` = `Blocked` | Command lifecycle via F2 | Written on preflight failure or FSP stop |
-| `Status` = `Ready` | `/brainstorm` | Surface never writes this value (decision 2026-10-28) |
-| `Status` = `Integrated` | Host reconciler | Surface never writes this value (decision 2026-10-29) |
-| Result comment (`<!-- opencode-flow:result -->`) | Command via F3 | Independent of board state (OD2) |
+| `Status` = `In Progress` / `Blocked` | Command lifecycle via F2 | `/letsgo` lifecycle |
+| `Status` = `Ready` | `/brainstorm` | Surface never writes it |
+| `Status` = `Integrated` | Host reconciler | Surface never writes it |
+| Result comment (`<!-- opencode-flow:result -->`) | Command via F3 | Independent of board state |
 
 ### Board-absent behavior
 
-- **F1 fails closed** (`F1_UNRESOLVED`) ⇒ zero `gh project` writes, zero surface-initiated comments.
-- **Command-level contract preserved:** `/letsgo` still writes `result.json` and posts its issue comment per E19 (OD2 — end-to-end, F3 orthogonal to F1).
+F1 fails closed (`F1_UNRESOLVED`) ⇒ zero `gh project` writes, zero surface-initiated comments. `/letsgo` still writes `result.json` and posts its issue comment (F3 is orthogonal to F1).
 
 ### Sandbox install note
 

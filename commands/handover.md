@@ -7,12 +7,9 @@ model: opencode/qwen3.6-plus
 
 # Create Handover
 
-Generate a handover document that another engineer (or another agent) can pick
-up cold. Be specific. Vague handovers waste the next person's first hour.
+Generate a handover another engineer (or agent) can pick up cold. Be specific — vague handovers waste the next person's first hour.
 
 ## Collect technical context
-
-Run these commands and incorporate the output into the handover:
 
 ```bash
 BASE_BRANCH=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||' || echo main)
@@ -25,8 +22,7 @@ git diff --stat $(git merge-base HEAD $BASE_BRANCH)..HEAD 2>/dev/null
 
 ## Save handover via Engram
 
-Call `mem_session_summary` with this structure:
-
+Call `mem_session_summary` with:
 ```markdown
 ## Goal
 <What was being worked on this session>
@@ -50,9 +46,7 @@ Call `mem_session_summary` with this structure:
 
 ## Fallback: Markdown handover file
 
-If Engram MCP is unavailable, fall back to creating a Markdown file.
-
-Use this structure:
+If Engram is unavailable, write this structure:
 ```markdown
 # Handover — <YYYY-MM-DD HH:MM>
 
@@ -60,10 +54,7 @@ Use this structure:
 - Tasks completed, current state, what's working/blocked
 
 ## 2. Technical Context
-- Branch: <branch>
-- Commits: <git log -10 --oneline>
-- Modified: <git status --short>
-- Diff stats: <git diff --stat vs main>
+- Branch / commits / modified files / diff stats (from the commands above)
 
 ## 3. Decisions Made
 - Technical choices, trade-offs, rejected alternatives
@@ -84,10 +75,4 @@ Focus: $ARGUMENTS (or "general continuation")
 Skills: spec-driven-workflow
 ```
 
-Create the `handovers/` directory if it doesn't exist, then write the document to:
-
-```
-handovers/handover-$(date +%Y%m%d-%H%M%S).md
-```
-
-Print the resulting path so the user can open it.
+Create `handovers/` if needed, write to `handovers/handover-$(date +%Y%m%d-%H%M%S).md`, and print the path.

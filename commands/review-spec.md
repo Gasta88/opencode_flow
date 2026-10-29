@@ -7,33 +7,22 @@ model: opencode/qwen3.6-plus
 
 # Review Spec: $ARGUMENTS
 
-You are a human-gated review dispatcher. Do not write implementation code —
-present the spec to the user, collect their decision, and act accordingly.
+Human-gated review dispatcher. Do not write implementation code — present the spec, collect the user's decision, and act accordingly.
 
 ## Step 1 — Parse arguments
 
-`$ARGUMENTS` is the issue key, optionally followed by `--visual`.
-
-Extract:
-- **ISSUE_KEY**: the first token (e.g. `FEAT-123`)
-- **--visual**: present if the flag appears in arguments
+**ISSUE_KEY**: first token. **--visual**: present if the flag appears.
 
 ## Step 2 — Locate the spec
 
-Verify these files exist:
-- `specs/issue-ISSUE_KEY-spec.md`
-- `specs/issue-ISSUE_KEY-progress.md`
-
-If either is missing, stop and print:
+Require `specs/issue-ISSUE_KEY-spec.md` and `specs/issue-ISSUE_KEY-progress.md`. Missing → stop:
 ```
 ❌ Spec not found for ISSUE_KEY. Run /analyze-issue first.
 ```
 
 ## Step 2.1 — Detect quick-mode
 
-Read the first lines of `specs/issue-ISSUE_KEY-progress.md`. If it contains the
-line `MODE: quick`, stop and print:
-
+If `progress.md` contains `MODE: quick`, stop:
 ```
 ℹ️  ISSUE_KEY is a quick-mode spec. Quick specs skip the human review gate.
    Run /implement-spec ISSUE_KEY to proceed directly.
@@ -41,9 +30,7 @@ line `MODE: quick`, stop and print:
 
 ## Step 2.2 — Verify phase completion
 
-Read `specs/issue-ISSUE_KEY-progress.md`. Under the `## Phases` heading, scan
-all `- [ ]` / `- [x]` lines. Every checkbox must be `[x]`. If any checkbox is
-`[ ]`, stop and print:
+Every `- [ ]`/`- [x]` line under `## Phases` must be `[x]`. Else stop:
 ```
 ❌ Spec for ISSUE_KEY is incomplete. Re-run /analyze-issue.
 Unfinished phases: <list>
@@ -51,11 +38,9 @@ Unfinished phases: <list>
 
 ## Step 3 — Present the spec
 
-Read `specs/issue-ISSUE_KEY-spec.md` in full. If `--visual` flag is present, render as HTML with the Implementation Plan as an interactive checklist (fall back to text if unavailable). Otherwise, present section by section: Requirements, Technical Specification, Implementation Plan, Test Strategy, Definition of Done.
+Read `specs/issue-ISSUE_KEY-spec.md` in full. With `--visual`, render as HTML with the Implementation Plan as an interactive checklist (fall back to text if unavailable). Otherwise present section by section: Requirements, Technical Specification, Implementation Plan, Test Strategy, Definition of Done.
 
 ## Step 4 — Prompt for decision
-
-Ask the user:
 
 ```
 How would you like to proceed?
@@ -64,25 +49,11 @@ How would you like to proceed?
   [J] Reject
 ```
 
-Capture the user's response.
-
 ## Step 5a — On approval
 
-If the user chooses "Approve as-is":
+`mem_update` with `topic_key: "review/ISSUE_KEY/human-approval"`, `title: "Human Review — Approved for ISSUE_KEY"`, `type: manual`, `scope: project`, content What/Why/Where/Learned.
 
-Call `mem_update` with:
-- `topic_key`: "review/ISSUE_KEY/human-approval"
-- `title`: "Human Review — Approved for ISSUE_KEY"
-- `type`: manual
-- `scope`: project
-- `content`:
-  **What**: Spec approved by user on <YYYY-MM-DD>
-  **Why**: Human review gate passed
-  **Where**: specs/issue-ISSUE_KEY-spec.md
-  **Learned**: Ready for /implement-spec or /implement-loop
-
-If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
-
+If Engram is unavailable, append to `progress.md`:
 ```markdown
 ## Human Review
 - [x] Approved by user on <YYYY-MM-DD>
@@ -95,12 +66,8 @@ Print:
 
 ## Step 5b — On request changes
 
-If the user chooses "Request changes":
-
-1. Collect free-text feedback from the user.
-2. If the feedback is empty, re-prompt the user for feedback.
-3. Re-invoke `@spec-analyst` with:
-
+1. Collect free-text feedback; if empty, re-prompt.
+2. Re-invoke `@spec-analyst`:
 ```
 Revise the spec for issue ISSUE_KEY based on the following feedback.
 Existing spec: specs/issue-ISSUE_KEY-spec.md
@@ -109,19 +76,12 @@ Feedback: <user feedback>
 Regenerate only the affected sections. Do not discard Phase 1–2 work.
 Update progress.md to reflect which phases were re-done.
 ```
-
-4. After regeneration, present only the changed sections with a summary of what
-   was modified, then re-prompt for decision (Step 4).
+3. Present only the changed sections with a summary, then re-prompt (Step 4).
 
 ## Step 5c — On rejection
 
-If the user chooses "Reject":
-
-Do NOT delete any files. Leave them on disk as an audit trail.
-
-Print:
+Do NOT delete any files; leave them as an audit trail. Print:
 ```
 ⚠️  Spec for ISSUE_KEY has been rejected. Files remain on disk as audit trail. Run /analyze-issue to start fresh if needed.
 ```
-
 Stop.

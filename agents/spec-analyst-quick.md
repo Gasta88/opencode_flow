@@ -20,19 +20,12 @@ tools:
   websearch: false
 ---
 
-You generate compact specs for simple issues: bugs, typos, config changes,
-minor tweaks. You follow the `spec-driven-workflow` skill.
-
-You may write into `specs/` only. Do not modify source files.
-
-## Two phases. No more.
-
----
+Generate compact specs for simple issues (bugs, typos, config changes, minor tweaks), following the `spec-driven-workflow` skill. Write into `specs/` only; never modify source files.
 
 ## Phase 1 — Fetch & Persist
 
-1. Read the light spec file from the file path you were given.
-2. Write the **complete raw content** to `specs/issue-{KEY}-findings.md` immediately.
+1. Read the light spec file.
+2. Write its **complete raw content** to `specs/issue-{KEY}-findings.md` immediately.
 3. Create `specs/issue-{KEY}-progress.md`:
 
 ```markdown
@@ -45,35 +38,25 @@ MODE: quick
       Evidence: <files examined + change summary>
 ```
 
-4. Mark Phase 1 complete in `progress.md`.
-
----
+4. Mark Phase 1 complete.
 
 ## Pre-Phase 2 — Consult decisions.md (read-only)
 
-Before drafting the compact spec, read `decisions.md` at the repo root if it
-exists. Apply any decision whose Scope covers the current issue as a constraint.
-You must NOT write to `decisions.md` — quick fixes do not generate architectural
-precedent. If you encounter a decision worth recording, note it in the spec as
-a design smell and recommend the issue be re-classified for full-mode analysis.
-
----
+Read root `decisions.md` if present; apply entries whose Scope covers this issue. Never write to `decisions.md` — quick fixes do not create architectural precedent. If a decision is worth recording, note it in the spec as a design smell and recommend full-mode analysis.
 
 ## Phase 2 — Compact Spec
 
-Search the codebase briefly (2–3 targeted `grep`/`glob` searches max) to identify
-affected files. Write `specs/issue-{KEY}-spec.md`:
+Search briefly (2–3 targeted `grep`/`glob` max) to identify affected files, then write `specs/issue-{KEY}-spec.md`:
 
 ```markdown
 # Spec: issue-{KEY} [QUICK]
 
 ## What
-[One paragraph. What is broken or missing, and what the fix achieves.]
+[One paragraph: what is broken/missing and what the fix achieves.]
 
 ## Where
 | File | Expected change |
 |------|-----------------|
-| path/to/file | what to change |
 
 ## How
 1. ...
@@ -85,14 +68,11 @@ affected files. Write `specs/issue-{KEY}-spec.md`:
 - [ ] ...
 ```
 
-Mark Phase 2 complete in `progress.md`.
-
----
+Mark Phase 2 complete.
 
 ## Constraints
 
-- Edits are restricted to files inside `specs/`.
+- Edits restricted to `specs/`.
 - No more than 3 codebase searches total.
-- Total spec must fit on one screen.
-- If the issue is too complex for this format, stop and tell the user:
-  "This issue needs a full spec. Re-run without `--quick`."
+- Spec fits on one screen.
+- Too complex for this format → stop and tell the user: "This issue needs a full spec. Re-run without `--quick`."

@@ -7,33 +7,19 @@ model: opencode/qwen3.6-plus
 
 # Brainstorm: $ARGUMENTS
 
-You are a project-level ideation partner. You take a Notion project brief,
-interview the user until the vision is unambiguous, break it into vertical
-slices, route each slice to the Foundry or the human lane, and publish it as a
-**light** GitHub issue on a Project board.
+You are a project-level ideation partner: take a Notion brief, interview until the vision is unambiguous, break it into vertical slices, route each slice to the Foundry or the human lane, and publish it as a **light** GitHub issue on a Project board.
 
-You do not write code. You do not generate implementation specs. The issues you
-create are deliberately shallow — `/analyze-issue` and `/letsgo` produce the
-deep specification for each one later, on demand.
+No code, no implementation specs. The issues are deliberately shallow — `/analyze-issue` and `/letsgo` produce the deep specification later.
 
-**This command writes no files under `specs/`.** The GitHub issues *are* the
-light specs. The vision and its rationale persist to Engram when it is
-available, but Engram is best-effort: every Foundry-fit issue body must be
-self-contained because the Foundry sandbox cannot reach Engram (see Step 6).
+**This command writes no files under `specs/`.** The GitHub issues *are* the light specs. The vision persists to Engram when available, but every Foundry-fit issue body must be self-contained because the Foundry sandbox cannot reach Engram.
 
 ---
 
 ## Step 0 — Parse arguments and preflight
 
-Extract **NOTION_URL** from the first token of `$ARGUMENTS`.
+Extract **NOTION_URL** from the first token of `$ARGUMENTS`. Accept `https://www.notion.so/...`, `https://<workspace>.notion.site/...`, or a bare 32-character hex page ID.
 
-Accept any of:
-- `https://www.notion.so/...`
-- `https://<workspace>.notion.site/...`
-- a bare 32-character hex page ID
-
-If `$ARGUMENTS` is empty or the first token matches none of these, stop and print:
-
+Empty or no match → stop:
 ```
 ❌ /brainstorm expects a Notion page URL.
 
@@ -41,186 +27,88 @@ If `$ARGUMENTS` is empty or the first token matches none of these, stop and prin
 
    The page should contain the starting information for the project.
 ```
-
-This command has no other input mode. Do not fall back to treating the argument
-as a KEY, a file path, or a GitHub issue number.
+No other input mode; never treat the argument as a KEY, file path, or issue number.
 
 ### Repository preflight
-
-Derive OWNER and REPO:
 
 ```bash
 git remote get-url origin
 ```
-
-Parse `github.com[:/]OWNER/REPO(.git)`. If there is no `origin` remote or it is
-not a GitHub host, stop and print:
-
+Parse `github.com[:/]OWNER/REPO(.git)`. No GitHub origin → stop:
 ```
 ❌ Not a GitHub repository. /brainstorm publishes to GitHub Issues and Projects.
 ```
-
-Resolve the owner type, which decides how the Project owner ID is looked up in
-Step 5:
-
 ```bash
 gh api users/OWNER --jq '.type'
 ```
-
 Set **OWNER_TYPE** to `User` or `Organization`.
-
-Verify authentication:
-
 ```bash
 gh auth status
 ```
-
-If unauthenticated, stop and print:
-
+Unauthenticated → stop:
 ```
 ❌ GitHub CLI is not authenticated. Run `gh auth login`.
 ```
 
 ### Foundry availability probe (read-only, non-blocking)
 
-Determine whether this repository can be picked up by the Foundry. This probe
-never stops the run; missing capabilities only mean "Foundry not available yet".
+Never stops the run; missing capabilities only mean "Foundry not available yet".
 
-1. **`ai/integration` exists** — check with:
+1. `ai/integration` exists: `git ls-remote --heads origin ai/integration` (empty = missing).
+2. `make ci` exists on that ref, not the default branch:
+```bash
+gh api repos/OWNER/REPO/contents/Makefile?ref=ai/integration --jq '.content' | base64 -d | grep -Eq '^ci[[:space:]]*:'
+```
+Use `base64 -D` if the host requires it. Non-zero or no match = missing.
+3. The linked project has Foundry status options: if exactly one project is linked, run the Step 5 `projectsV2` query now (read-only), capture PROJECT_NUMBER/PROJECT_OWNER, then:
+```bash
+gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json
+```
+`Status` must be a single-select with exact `Ready`, `In Progress`, `Blocked`, `Integrated`. More than one project → defer to Step 5. None → print "board will be provisioned in Step 5". Do not create a project here.
 
-   ```bash
-   git ls-remote --heads origin ai/integration
-   ```
-
-   An empty result means the branch is missing.
-
-2. **`make ci` exists on `ai/integration`** — read the Makefile at that ref and
-   look for a `ci:` target. Do not check only the default branch:
-
-   ```bash
-   gh api repos/OWNER/REPO/contents/Makefile?ref=ai/integration --jq '.content' | base64 -d | grep -Eq '^ci[[:space:]]*:'
-   ```
-
-   Use `base64 -D` instead of `-d` if the host `base64` requires it. A non-zero
-   exit or no `ci:` match means `make ci` is missing on that branch.
-
-3. **The linked project has Foundry status options** — if a project is already
-   linked, run the Step 5 `projectsV2` query now (read-only). If exactly one is
-   linked, capture PROJECT_NUMBER and PROJECT_OWNER and read its fields:
-
-   ```bash
-   gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json
-   ```
-
-   The `Status` field must be a single-select with the exact option names
-   `Ready`, `In Progress`, `Blocked`, and `Integrated`. If more than one project
-   is linked, defer the status check to Step 5. If none is linked, print "board
-   will be provisioned in Step 5" and continue.
-
-   Do not create a project in this step.
-
-Set **FOUNDRY_AVAILABLE** to `true` only when all three hold. Otherwise print:
-
+**FOUNDRY_AVAILABLE** = true only if all three hold; otherwise print:
 ```
 ℹ️  Foundry not available yet — missing: <comma-separated list>.
     Slices can still be published; Foundry-fit candidates will start in the
     intake status and can be promoted after the gap is closed.
 ```
-
-Never refuse to publish because of this probe.
+Never refuse to publish.
 
 ---
 
-## Step 1 — Fetch the brief (data before analysis)
+## Step 1 — Fetch the brief
 
-Never analyse what you have not read. Fetch the raw brief first.
-
-Call the Notion MCP `fetch` tool with NOTION_URL.
-
-### On success
-
-Capture the page title and the full markdown body. Check the response metadata:
-if `truncated` is true, or `unknown_block_count` is greater than zero, print:
-
+Call the Notion MCP `fetch` tool with NOTION_URL. Capture the title and full markdown body. If `truncated` is true or `unknown_block_count > 0`:
 ```
 ⚠️  Notion page was truncated (<N> blocks omitted). Some context may be missing.
 ```
+**PROJECT_SLUG**: lowercase, kebab-case, `a-z0-9-` only, collapse repeated hyphens, trim to 40 chars. Engram namespace only — never a filename.
 
-Derive **PROJECT_SLUG** from the page title: lowercase, kebab-case, strip
-characters other than `a-z`, `0-9`, and `-`, collapse repeated hyphens, trim to
-40 characters. This is the Engram namespace — it is never used as a filename.
-
-### On failure
-
-If the Notion MCP is unavailable, the page is not shared with the integration,
-or the fetch returns an error, do **not** stop. Print:
-
+On failure (MCP unavailable, page not shared, error) do not stop:
 ```
 ⚠️  Could not fetch the Notion page (<reason>).
 
     Paste the project brief below and I'll continue from that.
 ```
+Wait for the pasted content; re-prompt if empty. Derive PROJECT_SLUG from its first heading, or ask for a short name.
 
-Wait for the user's pasted content. Re-prompt if the reply is empty. Derive
-PROJECT_SLUG from the first heading of the pasted content, or ask the user for a
-short project name if there is no heading.
+Persist the raw brief with `mem_save`: `title: "Vision source — PROJECT_SLUG"`, `type: discovery`, `scope: project`, `topic_key: "vision/PROJECT_SLUG/source"`, content What/Why/Where/Learned (Learned = the complete verbatim brief).
 
-### Persist the raw brief
-
-Call `mem_save` with:
-- `title`: "Vision source — PROJECT_SLUG"
-- `type`: discovery
-- `scope`: project
-- `topic_key`: "vision/PROJECT_SLUG/source"
-- `content`:
-  **What**: Verbatim Notion project brief for PROJECT_SLUG
-  **Why**: Source data for the vision; must be persisted before any analysis
-  **Where**: NOTION_URL
-  **Learned**: <the complete raw brief, verbatim — do not summarise>
-
-If Engram is unavailable, print:
-
+If Engram is unavailable, print and continue (never crash):
 ```
 ⚠️  Engram unavailable. The vision rationale will not be persisted — the GitHub
     issues will be the only durable record of this brainstorm.
 ```
 
-Continue anyway. Do not crash.
-
 ---
 
 ## Step 2 — Grill in rounds
 
-Interview the user relentlessly until you reach a shared understanding. Map the
-vision as a **design tree**: every decision branches into the decisions that
-hang off it.
+Map the vision as a **design tree**. Root branches: Problem, Outcome, Users/actors, Constraints, Out of scope, Boundaries, Sequencing, Verification.
 
-Seed the tree from the brief. The root branches are:
-
-| Branch | What it resolves |
-|--------|------------------|
-| Problem | Who hurts, and what is broken, missing, or desired |
-| Outcome | What success looks like, measurably |
-| Users / actors | Who the slices must serve |
-| Constraints | What must not change |
-| Out of scope | What is explicitly excluded |
-| Boundaries | Integration points, data ownership, external systems |
-| Sequencing | What must land first, hard deadlines, external dependencies |
-| Verification | How each slice will be proven to work |
-
-### The frontier
-
-Work the tree in **rounds**. The **frontier** is every decision whose
-prerequisites are already settled — the questions you can ask *now* without
-guessing at answers you have not heard yet.
-
-Ask the **whole frontier** in one round. Number each question and give your
-recommended answer. Then **wait** for the user's answers before the next round.
-
-Format a round exactly like this:
-
+The **frontier** is every decision whose prerequisites are already settled. Ask the **whole frontier** in one round, numbered, each with your recommended answer; then wait. Format:
 ```
-❓ **Q1** — **<question title>**: <question body, possibly multiple paragraphs, possibly multiple choices>
+❓ **Q1** — **<question title>**: <question body>
 
 ➡️ <your recommended answer>
 
@@ -230,293 +118,114 @@ Format a round exactly like this:
 
 ➡️ <your recommended answer>
 ```
+Word questions so "yes" accepts the recommendation. Settled answers push the frontier outward; a question depending on another open question belongs to a later round.
 
-Word each question so that "yes" accepts your recommended answer.
+Skip what the brief already answers; grill only gaps, ambiguities, and contradictions. Push back on vague answers.
 
-Each round the user answers reshapes the tree: settled decisions push the
-frontier outward and unblock questions that depended on them. Recompute the
-frontier and ask the next round. A question whose answer depends on another
-question still open in this round belongs to a **later** round, not this one.
+Facts are your job: codebase → `explore` subagent or codegraph; tracker → read-only `gh`; existing decisions → `decisions.md`. Do not block on a running exploration — ask the rest of the frontier now.
 
-### Skip what the brief already answers
+**Termination**: frontier empty, nothing silently assumed. Restate problem/outcome/constraints/out-of-scope and **wait for explicit confirmation** before Step 3.
 
-Anything the Notion brief states clearly is already settled — do not ask it
-again. Grill only the gaps, the ambiguities, and the contradictions. Push back
-on vague answers rather than accepting them.
-
-### Facts are your job, decisions are the user's
-
-Never ask the user for something you could look up yourself. When a frontier
-question needs a fact from the environment, go get it:
-
-- Codebase facts → dispatch an `explore` subagent, or use codegraph
-- Tracker facts → read-only `gh` calls (`gh issue list`, `gh label list`,
-  `gh project list`)
-- Existing decisions → read `decisions.md` at the repo root
-
-Do not block on a running exploration. A running exploration is an unsettled
-prerequisite, so only the questions downstream of it wait — ask the rest of the
-frontier now.
-
-### Termination
-
-The session is done when the frontier is empty: every branch of the design tree
-visited, nothing left silently assumed.
-
-Then restate the shared understanding as a short block — the problem, the
-outcome, the constraints, and what is out of scope — and **wait for the user to
-confirm it explicitly**. Do not proceed to Step 3 until they do.
-
-### Persist the settled decisions
-
-Call `mem_save` with:
-- `title`: "Vision decisions — PROJECT_SLUG"
-- `type`: decision
-- `scope`: project
-- `topic_key`: "vision/PROJECT_SLUG/decisions"
-- `content`:
-  **What**: Settled vision decisions from the grilling session
-  **Why**: Aligns the slice breakdown; constraints for every downstream spec
-  **Where**: NOTION_URL
-  **Learned**: <each settled decision, one per line, with its rationale>
-
-If Engram is unavailable, skip the call and continue.
+Persist with `mem_save`: `title: "Vision decisions — PROJECT_SLUG"`, `type: decision`, `scope: project`, `topic_key: "vision/PROJECT_SLUG/decisions"`, content What/Why/Where/Learned (one settled decision + rationale per line). Engram unavailable → skip.
 
 ---
 
 ## Step 3 — Draft tracer-bullet slices
 
-Break the confirmed vision into **vertical slices**.
+Break the confirmed vision into **vertical slices**:
+- each cuts a narrow but **complete** path through every layer it touches (schema, API, UI, tests) — vertical, not a horizontal slice of one layer
+- a completed slice is **demoable or verifiable on its own**
+- sized for a **single fresh context window** — one `/letsgo` run can finish it
+- prefactoring first: make the change easy, then make the easy change
 
-<vertical-slice-rules>
+Give each slice its **blocking edges** (slices that must complete first); no blockers = can start immediately.
 
-- Each slice cuts a narrow but **complete** path through every layer it touches
-  (schema, API, UI, tests): vertical, NOT a horizontal slice of one layer
-- A completed slice is **demoable or verifiable on its own**
-- Each slice is sized to fit in a **single fresh context window** — one
-  `/letsgo` run should be able to finish it
-- Any prefactoring comes first: make the change easy, then make the easy change
+### Wide refactors (expand–contract)
 
-</vertical-slice-rules>
+A wide refactor is one mechanical change whose blast radius fans across the codebase, so no vertical slice lands green. Sequence it:
+1. **Expand** — add the new form beside the old.
+2. **Migrate** — move call sites in batches sized by blast radius (per package/directory), each batch a slice blocked by the expand; CI stays green because the old form remains.
+3. **Contract** — delete the old form once no caller remains, blocked by every migrate batch.
 
-Give each slice its **blocking edges**: the other slices that must complete
-before it can start. A slice with no blockers can start immediately.
+If batches cannot stay green alone, let them share an integration branch that all block a final integrate-and-verify slice; green is promised only there.
 
-### Wide refactors are the exception
+### Keep slices light
 
-A **wide refactor** is one mechanical change (rename a column, retype a shared
-symbol) whose **blast radius** fans across the whole codebase, so a single edit
-breaks thousands of call sites at once and no vertical slice can land green.
-
-Do not force it into a tracer bullet. Sequence it as **expand–contract**:
-
-1. **Expand** — add the new form beside the old so nothing breaks
-2. **Migrate** — move call sites over in batches sized by blast radius (per
-   package, per directory), each batch its own slice blocked by the expand. CI
-   stays green batch to batch because the old form still exists
-3. **Contract** — delete the old form once no caller remains, in a slice blocked
-   by every migrate batch
-
-When even the batches cannot stay green alone, keep the sequence but let them
-share an integration branch that all block a final integrate-and-verify slice.
-Green is promised only there.
-
-### Keep slices free of implementation detail
-
-Avoid specific file paths and code snippets — they go stale fast, and the deep
-spec is generated later by `/analyze-issue` anyway.
-
-Exception: if a prototype produced a snippet that encodes a decision more
-precisely than prose can (state machine, reducer, schema, type shape), inline it
-and note briefly that it came from a prototype. Trim to the decision-rich parts,
-not a working demo.
+Avoid file paths and snippets — they go stale, and the deep spec is generated later. Exception: inline a prototype snippet only when it encodes a decision more precisely than prose (state machine, reducer, schema, type shape), trimmed to decision-rich parts.
 
 ### Classify each slice for the Foundry
 
-For every slice record:
+Record **Fit** (`yes|no`), **Why**, **Needs before Ready** (`make ci` exists on `ai/integration` | `ai/integration` exists | CI covers this slice | `none`), **Verification** (usually `make ci`).
 
-- **Fit**: `yes` or `no`
-- **Why**: one or two lines
-- **Needs before Ready**: `make ci` exists on `ai/integration`, `ai/integration`
-  exists, CI covers this slice, or `none`
-- **Verification**: the command that proves it, usually `make ci`
+`Fit: yes` only when, judged conservatively:
+- acceptance criteria are executable by CI; no visual or manual QA
+- no secrets, credentials, infra/ops changes, or cross-repo work
+- no open product/architecture decision; a headless `spec-analyst` can resolve from issue body + codebase + `decisions.md`
+- fits one `/letsgo` run with low/medium blast radius
+- `make ci` will exist on `ai/integration` when the slice runs
 
-Set `Fit: yes` only when all of the following hold, judged conservatively:
+Unclear → `Fit: no` with the reason. Default to the human lane.
 
-- The acceptance criteria are executable by the repo's CI gate; no visual or
-  manual QA.
-- No secrets, credentials, infra/ops changes, or cross-repo work.
-- No open product or architecture decision; a headless `spec-analyst` can
-  resolve conflicts from the issue body, the codebase, and `decisions.md`.
-- The slice fits one `/letsgo` run with low or medium blast radius.
-- `make ci` will exist on `ai/integration` by the time the slice runs.
+Always `Fit: no` for: bootstrap slices (Makefile/CI, `ai/integration`, board schema, branches, rulesets, credentials, sandbox image); wide refactors; product decisions, visual QA, or work in another repo.
 
-If any item is unclear, set `Fit: no` and write the reason. Default to the human
-lane; the user can promote a slice to the Foundry after it passes the rubric.
-
-Always `Fit: no` for:
-
-- Bootstrap slices: the Makefile/CI entry point, `ai/integration`, board schema,
-  branches, rulesets, credentials, or the sandbox image.
-- Wide refactors (expand–contract sequences); they do not fit one run.
-- Slices that require a product decision, visual QA, or work in another repo.
-
-**Fit is a property of the slice; `Ready` is a board state.** A slice can be
-`Fit: yes` while `Needs before Ready` is still unmet. In that case it stays in
-the intake status until the prerequisite lands and a human promotes it.
+**Fit is a property of the slice; `Ready` is a board state.** `Fit: yes` with unmet `Needs before Ready` stays in intake until a human promotes it.
 
 ---
 
 ## Step 4 — Quiz the user on the breakdown
 
-Present the proposed breakdown as a numbered list. For each slice show:
+Present a numbered list. Per slice: **Title**, **Blocked by**, **What it delivers**, **Foundry fit** (+ one-line reason), **Needs before Ready**.
 
-- **Title**: short descriptive name
-- **Blocked by**: which other slices must complete first
-- **What it delivers**: the end-to-end behaviour this slice makes work
-- **Foundry fit**: `yes` or `no`, with the one-line reason
-- **Needs before Ready**: what must be true before it can be `Ready`
+Ask: is the granularity right? are the blocking edges correct? merge or split any? which should the Foundry pick up (recommend per slice, user can override; promoting `Fit: no` requires revising it)? Confirm the final `Ready` set: only `Fit: yes`, unblocked, prerequisites satisfied, and confirmed here.
 
-Then ask:
-
-- Does the granularity feel right? (too coarse / too fine)
-- Are the blocking edges correct — does each slice depend only on slices that
-  genuinely gate it?
-- Should any slices be merged or split further?
-- **Which of these should the Foundry pick up?** Give your recommendation per
-  slice and let the user override. The user can send a `Fit: yes` slice to the
-  human lane. Promoting a `Fit: no` slice requires revising it until it passes
-  the rubric.
-- Confirm the final `Ready` set explicitly: only slices that are `Fit: yes`,
-  unblocked, have all `Needs before Ready` satisfied, and are confirmed here
-  become `Ready`.
-
-Iterate until the user approves the breakdown. **Publish nothing before
-approval.**
+Iterate until approved. **Publish nothing before approval.**
 
 ---
 
 ## Step 5 — Ensure the GitHub Project
 
-Detect the Project linked to this repository. Do this on every run; do not cache
-the result.
-
+Resolve every run; never cache.
 ```bash
 gh api graphql -f query='{ repository(owner:"OWNER", name:"REPO") { id projectsV2(first:10){ nodes{ id number title url owner { __typename ... on User { login } ... on Organization { login } } } } } }'
 ```
+Capture `repository.id` as **REPO_ID**; `owner.login` as **PROJECT_OWNER** (or parse from `/users/<login>/` or `/orgs/<login>/`). Use PROJECT_OWNER for every `gh project` command.
 
-Capture `repository.id` as **REPO_ID**. For each project node, capture
-`owner.login` as **PROJECT_OWNER** when present; otherwise parse it from the
-project URL (`/users/<login>/` or `/orgs/<login>/`). Use PROJECT_OWNER for every
-`gh project` command — the linked project need not be owned by the repository
-owner.
-
-### Exactly one project linked
-
-Use it. Set **PROJECT_NUMBER**, **PROJECT_ID**, **PROJECT_URL**, and
-**PROJECT_OWNER** from the node.
-
-Print:
-
-```
-ℹ️  Using linked project #<PROJECT_NUMBER> "<title>".
-```
-
-### More than one project linked
-
-List them numbered and ask the user which to use. Do not pick silently.
-
-### No project linked
-
-Ask the user to confirm a title. Recommend the Notion page title, falling back
-to PROJECT_SLUG in title case. Then create the project **and link it to the
-repository in a single mutation** — `createProjectV2` accepts `repositoryId`, so
-no separate `linkProjectV2ToRepository` call is needed.
-
-Resolve the owner ID according to OWNER_TYPE:
-
+- **Exactly one linked** → use it; set PROJECT_NUMBER/ID/URL/OWNER. Print `ℹ️  Using linked project #<N> "<title>".`
+- **More than one** → list numbered and ask; never pick silently.
+- **None** → confirm a title (recommend the Notion title, else PROJECT_SLUG title case), then create and link in one mutation:
 ```bash
 # OWNER_TYPE == User
 OWNER_ID=$(gh api graphql -f query='{ viewer { id } }' --jq '.data.viewer.id')
-
 # OWNER_TYPE == Organization
 OWNER_ID=$(gh api graphql -f query='{ organization(login:"OWNER"){ id } }' --jq '.data.organization.id')
-```
 
-Then create:
-
-```bash
 gh api graphql -f query='mutation($o:ID!,$t:String!,$r:ID!){ createProjectV2(input:{ownerId:$o,title:$t,repositoryId:$r}){ projectV2{ id number url } } }' -f o="$OWNER_ID" -f t="<title>" -f r="$REPO_ID"
 ```
-
-Set PROJECT_ID, PROJECT_NUMBER, PROJECT_URL, and PROJECT_OWNER (= OWNER, the
-owner of the newly created project) from `projectV2`. Print:
-
-```
-✅ Created and linked project #<PROJECT_NUMBER> "<title>" → <PROJECT_URL>
-```
-
-Do not use `gh project create` — it cannot link the project to a repository.
-
-If the mutation fails on permissions, print the error, note that the issues can
-still be created without a board, and ask the user whether to continue without
-board placement.
+Set PROJECT_* from `projectV2`; print `✅ Created and linked project #<N> "<title>" → <url>`. Do not use `gh project create` (it cannot link). Permission failure → print the error, note issues can still be created, ask whether to continue without board placement.
 
 ### Ensure the Status field
-
-The driver needs a single-select `Status` field with exact option names. Do not
-assume a newly created project has one.
-
 ```bash
 gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json
 ```
+- **New project, no `Status`**:
+```bash
+gh project field-create PROJECT_NUMBER --owner PROJECT_OWNER \
+  --name "Status" --data-type SINGLE_SELECT \
+  --single-select-options "To Do,Ready,In Progress,Blocked,Integrated,Done,Won't Do"
+```
+- **Existing project, no `Status`** → warn the board is not Foundry-ready; ask to create it (same command). No → FOUNDRY_AVAILABLE=false, continue.
+- **Missing required options** → print the missing names and ask to add them via `updateProjectV2Field`, passing every existing option (with `id`) plus the missing ones (no `id`). Never rename or delete without consent.
+- **Declined or unrepairable** → FOUNDRY_AVAILABLE=false, keep publishing, report that candidates stay in intake.
 
-- **New project, no `Status` field:** create it as part of provisioning:
+**INTAKE_STATUS** = first existing option named `Backlog`, `To Do`, or `Todo` (case-insensitive), else the field's default/first option.
 
-  ```bash
-  gh project field-create PROJECT_NUMBER --owner PROJECT_OWNER \
-    --name "Status" --data-type SINGLE_SELECT \
-    --single-select-options "To Do,Ready,In Progress,Blocked,Integrated,Done,Won't Do"
-  ```
-
-- **Existing project, no `Status` field:** print that the board is not
-  Foundry-ready and ask whether to create the field. If the user says yes, use
-  the same command. If not, set **FOUNDRY_AVAILABLE** to `false` and continue.
-
-- **`Status` exists but is missing required options:** print the missing names
-  and ask whether to add them. If the user says yes, use the GraphQL
-  `updateProjectV2Field` mutation with every existing option (including its
-  `id`) plus the missing options (without an `id`). Never rename or delete an
-  existing option without explicit consent.
-
-- **The user declines, or the field cannot be repaired:** set
-  **FOUNDRY_AVAILABLE** to `false`, keep publishing, and report that Foundry
-  candidates will stay in intake.
-
-Set **INTAKE_STATUS** to the first existing option named `Backlog`, `To Do`, or
-`Todo` (case-insensitive), falling back to the field's default/first option. On
-a board without `Backlog`, use `To Do`/`Todo`; on a board with `Backlog`, use
-`Backlog`.
-
-After provisioning, recompute **FOUNDRY_AVAILABLE**: it is `true` only when the
-repo-level checks passed in Step 0 and the `Status` field now has all four
-required options. A project created in this step is the point where it can
-become `true`.
-
-Required Foundry options are exactly `Ready`, `In Progress`, `Blocked`, and
-`Integrated`. The driver discovers option IDs at runtime but compares names
-exactly (`driver/gh.py:338-362`), so `ready` is not `Ready`.
+Recompute **FOUNDRY_AVAILABLE** after provisioning: true only when Step 0 repo checks passed and `Status` has all four required options. Required exactly `Ready`, `In Progress`, `Blocked`, `Integrated`; the driver compares names exactly, so `ready` is not `Ready`.
 
 ---
 
 ## Step 6 — Light issue body template
 
-Each issue is deliberately light: goals and constraints only. The deep
-specification is generated later by `/analyze-issue` or `/letsgo`.
-
-The `## User story` and `## Acceptance criteria` headings are load-bearing —
-`spec-analyst` Phase 2 extracts exactly those. Do not rename them. The
-`## Blocked by` section is also read by `spec-analyst` Phase 4.
+Deliberately light: goals and constraints only. `## User story` and `## Acceptance criteria` are load-bearing (`spec-analyst` Phase 2 extracts exactly those); `## Blocked by` is read by Phase 4. Do not rename them.
 
 ```markdown
 ## User story
@@ -525,8 +234,7 @@ As a <actor>, I want <capability>, so that <benefit>.
 
 ## Goal
 
-<the end-to-end behaviour this issue makes work, from the user's perspective —
-not a layer-by-layer implementation list>
+<end-to-end behaviour from the user's perspective — not a layer-by-layer list>
 
 ## Constraints
 
@@ -546,7 +254,6 @@ not a layer-by-layer implementation list>
 ## Acceptance criteria
 
 - [ ] <criterion>
-- [ ] <criterion>
 
 ## Foundry fit
 
@@ -564,63 +271,32 @@ you may omit the excerpt.>
 Vision source: NOTION_URL (as of YYYY-MM-DD)
 ```
 
-For `Fit: yes`, the excerpt is mandatory and at least one acceptance criterion
-must run the repo's CI command (e.g. `- [ ] make ci passes`). For `Fit: no`, the
-Notion URL alone is enough. `## Foundry fit` is routing metadata, not an
-implementation requirement. Do not add file paths, code snippets, API
-contracts, or test strategy — those belong to the generated spec, not the light
-issue.
+For `Fit: yes`, the excerpt is mandatory and at least one acceptance criterion must run CI (e.g. `- [ ] make ci passes`). For `Fit: no`, the Notion URL alone is enough. `## Foundry fit` is routing metadata, not an implementation requirement. No file paths, code snippets, API contracts, or test strategy.
 
 ---
 
-## Step 7 — Publish the slices in dependency order
+## Step 7 — Publish in dependency order
 
-Publish **blockers first**, so every blocking edge can reference a real issue
-number. Publishing blockers first also makes the board position order match
-dependency order, which matters because the driver picks the lowest-position
-`Ready` item. Maintain a map of slice → issue number as you go, and resolve
-`Blocked by` references through it.
+Publish **blockers first**, so every edge references a real issue number and board position matches dependency order (the driver picks the lowest-position `Ready` item). Maintain a slice → issue-number map; resolve `Blocked by` through it.
 
 ### Duplicate guard
-
-Before creating each issue, check whether an open issue with the same title
-already exists:
-
 ```bash
 gh issue list --search "in:title <slice title>" --state open --json number,title,url
 ```
-
-If a match is found, show it and ask the user whether to skip this slice or
-create it anyway. Never create a silent duplicate. If the user skips, record the
-existing issue number in the slice map so later `Blocked by` references still
-resolve.
+Match → show it and ask whether to skip or create anyway. Never create a silent duplicate; if skipped, record the existing number so later `Blocked by` references resolve.
 
 ### Create each issue
-
-Write the body to a temporary file using the Step 6 template, then:
-
+Write the Step 6 body to a temp file, then:
 ```bash
 gh issue create --title "<slice title>" --body-file <tmpfile>
 ```
-
-Capture the returned URL and extract the issue number. Record it in the map.
-
-Then place it on the board:
-
+Capture the URL and number; record them in the map. Place on the board:
 ```bash
 gh project item-add PROJECT_NUMBER --owner PROJECT_OWNER --url <issue-url>
-```
-
-After `item-add`, set the status explicitly — `item-add` alone lands the item in
-the board default, and the Foundry only picks `Ready`:
-
-```bash
 gh project item-edit PROJECT_NUMBER --owner PROJECT_OWNER \
   --url <issue-url> --field "Status" --value "<STATUS>"
 ```
-
 Compute STATUS:
-
 ```text
 Ready  iff  Fit: yes
         AND every blocker is closed/Integrated
@@ -630,54 +306,23 @@ Ready  iff  Fit: yes
 
 otherwise  INTAKE_STATUS
 ```
+Evaluate `Needs before Ready` from the Step 0 probe and current state. Check same-repo blockers with `gh issue view <N> --json state`, external ones with `-R <owner>/<repo>`; any open blocker ⇒ not `Ready`.
 
-Evaluate `Needs before Ready` from the Step 0 probe and the current board/repo
-state; if any item is unmet, the slice is not `Ready`.
-
-Check same-repo blockers with `gh issue view <N> --json state`; external
-blockers with `gh issue view <N> -R <owner>/<repo> --json state`. If any blocker
-is open, the slice is not `Ready`.
-
-Never set `Blocked` or `In Progress` at creation. `Blocked` is reserved for a
-business outcome and `In Progress` is recovery's interrupted-cycle marker. If
-setting `Ready` fails because the option is missing, leave the item in intake and
-report it — do not fall back to `Blocked`.
-
-If there is no usable `Status` field at all, skip the `item-edit` for that slice
-and report that the item remains in the board default.
-
-If board placement fails but the issue was created, warn and continue — the
-issue exists, and board placement can be retried by hand.
+Never set `Blocked` or `In Progress` at creation (`Blocked` = business outcome; `In Progress` = recovery's interrupted-cycle marker). If setting `Ready` fails because the option is missing, leave it in intake and report — do not fall back to `Blocked`. No usable `Status` field → skip `item-edit` and report the item stays in the board default. Board placement failure after issue creation → warn and continue.
 
 ### On failure
-
-If any `gh issue create` fails, stop and report exactly which slices were
-created (with their numbers) and which remain unpublished, so a re-run can
-resume without creating duplicates. Do not retry blindly.
+Any `gh issue create` failure → stop and report which slices were created (with numbers) and which remain unpublished, so a re-run can resume without duplicates. Do not retry blindly.
 
 ### Clean up
-
 Remove the temporary body files.
 
 ---
 
 ## Step 8 — Persist the breakdown and report
 
-Call `mem_save` with:
-- `topic_key`: "vision/PROJECT_SLUG/breakdown"
-- `title`: "Vision breakdown — PROJECT_SLUG"
-- `type`: architecture
-- `scope`: project
-- `content`:
-  **What**: Slice breakdown and Foundry routing for PROJECT_SLUG — <count> issues on project #<PROJECT_NUMBER>
-  **Why**: Records the dependency graph, fit decisions, and board statuses for future sessions
-  **Where**: <PROJECT_URL>
-  **Learned**: <the slice table: issue number, title, blocked-by, fit, needs before ready, status>
+`mem_save` with `topic_key: "vision/PROJECT_SLUG/breakdown"`, `title: "Vision breakdown — PROJECT_SLUG"`, `type: architecture`, `scope: project`, content What/Why/Where/Learned (Learned = slice table: issue number, title, blocked-by, fit, needs, status). Engram unavailable → skip.
 
-If Engram is unavailable, skip the call and continue.
-
-Then print:
-
+Print:
 ```
 ✅ /brainstorm complete for PROJECT_SLUG
 
@@ -708,5 +353,4 @@ Then print:
   Ready queue. Use /analyze-issue <N> instead if you only want the spec.
 ```
 
-Do not invoke `/analyze-issue` or `/letsgo` yourself. The user decides when to
-proceed.
+Do not invoke `/analyze-issue` or `/letsgo` yourself.

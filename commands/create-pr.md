@@ -9,18 +9,12 @@ model: opencode/qwen3.5-plus
 
 ## Step 1 — Commit any uncommitted changes
 
-Run `git status --short` to check for uncommitted changes.
+Run `git status --short`; clean → Step 2. Otherwise:
 
-If the working tree is clean (no output), skip to Step 2.
-
-1. Print the full list of changed files to the user.
-
-2. Scan for risk patterns: `.env`, `.env.*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `.DS_Store`. If found, stop with:
+1. Print the full list of changed files.
+2. Scan for `.env`, `.env.*`, `*.pem`, `*.key`, `*credentials*`, `*secret*`, `.DS_Store`. Match → stop:
    `⚠️  <file> matches a sensitive-file pattern. Remove it or add to .gitignore before re-running /create-pr.`
-
-3. If no risk patterns are found, generate the commit message from the diff.
-   Print the proposed commit message and the file list together, and ask
-   the user to confirm before running `git add -A && git commit`.
+3. Generate a commit message from the diff; print it with the file list; ask the user to confirm before `git add -A && git commit`.
 
 ## Step 2 — Analyse changes
 
@@ -35,20 +29,11 @@ git log $(git merge-base HEAD $BASE_BRANCH)..HEAD --oneline
 
 ## Step 3 — Gather evidence
 
-Before drafting, collect concrete evidence that the change works:
-
-1. If a test suite exists, run it and capture the output. If a test was added or
-   fixed by this change, note its name and its before/after result.
-2. If the change is visual and screenshots are feasible, note that; otherwise
-   rely on execution-based evidence (test results, console output).
-3. If no automated evidence exists, use what is true — e.g. "manual smoke test:
-   <what was exercised>". Never invent evidence.
+Run the test suite if one exists and capture output; for a new/fixed test, note its name and before/after result. Visual change → screenshots if feasible, else execution evidence. No automated evidence → state what is true (e.g. "manual smoke test: <what was exercised>"). Never invent evidence.
 
 ## Step 4 — Draft the PR description
 
-Skip all preambles and keep prose brief. Use the project's domain language
-(from `GLOSSARY.md` if it exists). Generate a description following this
-template:
+Skip preambles; keep prose brief; use project domain language (`GLOSSARY.md` if present).
 
 ```markdown
 ## Summary
@@ -76,52 +61,20 @@ template:
 
 ### Summary guidance
 
-Pick the smallest view that makes the key point clear. Place each visual next
-to the short text it supports. You may use one of these or several; it is
-unlikely you will use all of them — do not overwhelm the reader.
-
-- **Logic or algorithm** → pseudocode:
-  ```text
-  on(save)
-    if content is unchanged
-      return cached result
-    write new content
-  ```
-- **Runtime control flow** → call tree:
-  ```text
-  submitForm
-    createSession
-      persistPrompt
-    navigateToSession
-  ```
-- **UI structure** → component tree, including state and module boundaries that matter.
-- **File responsibility or broad refactor** → shallow file tree with one-line annotations.
-- **Component interaction / data flow** → Mermaid (`sequenceDiagram`, `flowchart`).
-- **The point is what changes and the surrounding shape already exists** → `diff`-shaped sketch (component trees, file layouts, call trees, or control flow with `+`/`-` markers).
-- **Most of a block is new** → show the whole block as code.
+Pick the smallest view; one visual is usually enough. Options: pseudocode (logic/algorithm), call tree (runtime flow), component tree (UI structure), shallow annotated file tree (responsibilities/refactor), Mermaid (interaction/data flow), `+`/`-` diff sketch (shape already exists), full block (mostly new).
 
 ### Evidence guidance
 
-Screenshots are S-tier when the change is visual and the environment supports
-them. Execution-based evidence is A-tier: test results, console output — show
-the exact test that failed before and passes now.
+Screenshots are S-tier for visual changes; execution evidence (test/console output) is A-tier — show the exact test that failed before and passes now.
 
 ### Merge Danger guidance
 
-- **Door**: a two-way door can be walked back (cheap revert); a one-way door
-  cannot (destructive actions, schema drops, data migrations, removed public
-  API, hard-to-reverse decisions).
-- **Blast Radius**: the potential impact or scope of the change — one word
-  (e.g. `none`, `single-module`, `all-consumers`, `schema`), then optional
-  ramifications (breakages for consumers, layout shift, migrations required).
+- **Door**: two-way = cheap revert; one-way = destructive actions, schema drops, migrations, removed public API, hard-to-reverse decisions.
+- **Blast Radius**: one word (`none`, `single-module`, `all-consumers`, `schema`) plus optional ramifications (consumer breakage, layout shift, migrations).
 
 ## Step 5 — Write the description to disk
 
-Write the description to `pr-description.md` in the repo root.
-
-**Important:** never commit `pr-description.md`, it is a working artefact — it must never be
-committed.
-
+Write it to `pr-description.md` in the repo root. Never commit it — it is a working artefact.
 
 ## Step 6 — Create the PR
 
@@ -129,10 +82,9 @@ committed.
 gh pr create --title "$ARGUMENTS" --body-file pr-description.md
 ```
 
-If `gh` is not authenticated, stop and tell the user to run `gh auth login`.
+Not authenticated → stop and tell the user to run `gh auth login`.
 
 ## Step 7 — Clean up
-
 
 ```bash
 rm pr-description.md

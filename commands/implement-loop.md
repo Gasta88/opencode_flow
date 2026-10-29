@@ -7,39 +7,27 @@ model: opencode/qwen3.5-plus
 
 # Implement Loop: $ARGUMENTS
 
-You are a loop governor. Do not write code yourself.
-Drive `@spec-implementer` and `@dod-evaluator` in alternation until DoD is met
-or the pass budget is exhausted.
+Loop governor. Do not write code yourself. Alternate `@spec-implementer` and `@dod-evaluator` until DoD is met or the pass budget is exhausted.
 
 ## Step 1 — Parse arguments
 
-`$ARGUMENTS` is the issue key, optionally followed by `--max-passes N`.
-
-Extract:
-- **ISSUE_KEY**: the first token (e.g. `FEAT-123`)
-- **MAX_PASSES**: the integer after `--max-passes` if present, else default to `3`
+**ISSUE_KEY**: first token. **MAX_PASSES**: integer after `--max-passes`, default `3`.
 
 ## Step 2 — Locate the spec
 
-Verify these files exist:
-- `specs/issue-ISSUE_KEY-spec.md`
-- `specs/issue-ISSUE_KEY-progress.md`
-
-If either is missing, stop and print:
+Require `specs/issue-ISSUE_KEY-spec.md` and `specs/issue-ISSUE_KEY-progress.md`. Missing → stop:
 ```
 ❌ Spec not found for ISSUE_KEY. Run /analyze-issue first.
 ```
 
 ## Step 2.1 — Reject quick-mode specs
 
-Read `specs/issue-ISSUE_KEY-progress.md`. If it contains `MODE: quick`, stop and print:
+If `progress.md` contains `MODE: quick`, stop:
 `❌ ISSUE_KEY is a quick-mode spec. Use /implement-spec instead — quick specs skip iterative DoD evaluation.`
 
 ## Step 2.2 — Verify phase completion
 
-Read `specs/issue-ISSUE_KEY-progress.md`. Under the `## Phases` heading, scan
-all `- [ ]` / `- [x]` lines. Every checkbox must be `[x]`. If any checkbox is
-`[ ]`, stop and print:
+Every `- [ ]`/`- [x]` line under `## Phases` must be `[x]`. Else stop:
 ```
 ❌ Spec for ISSUE_KEY is incomplete. Re-run /analyze-issue.
 Unfinished phases: <list>
@@ -47,8 +35,7 @@ Unfinished phases: <list>
 
 ## Step 2.3 — Human review gate
 
-Read `specs/issue-ISSUE_KEY-progress.md`. Search for a `## Human Review` section
-containing `- [x] Approved by user on <date>`. If absent or unchecked, stop and print:
+Require a `## Human Review` section with `- [x] Approved by user on <date>`. Else stop:
 ```
 ❌ Spec for ISSUE_KEY has not been human-reviewed.
    Run /review-spec ISSUE_KEY first.
@@ -56,55 +43,38 @@ containing `- [x] Approved by user on <date>`. If absent or unchecked, stop and 
 
 ## Step 2.5 — Fetch external documentation
 
-Invoke `@external-scout` with:
-
+Invoke `@external-scout`:
 > Fetch external dependency docs for issue **ISSUE_KEY**.
 > Spec: `specs/issue-ISSUE_KEY-spec.md`
 
-If the scout returns `NO_EXTERNAL_DEPS`, skip to Step 3.
-extdocs.md is fetched once before the loop begins and reused across all passes.
+`NO_EXTERNAL_DEPS` → Step 3. extdocs is fetched once before the loop and reused across passes.
 
 ## Step 3 — Loop
 
-Initialize: PASS_NUMBER = 1, VERDICT = "FAIL"
-
-Repeat until VERDICT == "PASS" or PASS_NUMBER > MAX_PASSES:
+PASS_NUMBER = 1, VERDICT = "FAIL". Repeat until VERDICT == "PASS" or PASS_NUMBER > MAX_PASSES.
 
 ### 3a — Implement pass
 
-If PASS_NUMBER == 1, invoke `@spec-implementer` with:
+Pass 1:
 > Implement issue **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`. Track progress. Follow the skill exactly.
 
-If PASS_NUMBER > 1, invoke `@spec-implementer` with:
+Later passes:
 > Resume **ISSUE_KEY** from `specs/issue-ISSUE_KEY-spec.md`. Previous DoD failures: <FAIL_REASON>. Address only failing items. Track progress.
 
 ### 3b — Evaluate
 
-Invoke `@dod-evaluator` with:
-
+Invoke `@dod-evaluator`:
 > Evaluate the Definition of Done for issue **ISSUE_KEY**.
 > Spec: `specs/issue-ISSUE_KEY-spec.md`
 > Progress: `specs/issue-ISSUE_KEY-progress.md`
 
-Capture the full response as EVALUATOR_OUTPUT.
-Set VERDICT = "PASS" if output starts with "PASS", else "FAIL".
-If VERDICT == "FAIL", capture the failure lines as FAIL_REASON.
+Capture the full response as EVALUATOR_OUTPUT. VERDICT = "PASS" if it starts with "PASS", else "FAIL"; on FAIL capture the failure lines as FAIL_REASON.
 
 ### 3c — Log pass result
 
-Call `mem_update` with:
-- `topic_key`: "loop/ISSUE_KEY/passes"
-- `title`: "Loop Pass PASS_NUMBER — <PASS or FAIL> for ISSUE_KEY"
-- `type`: manual
-- `scope`: project
-- `content`:
-  **What**: Loop pass PASS_NUMBER evaluated as <PASS or FAIL>
-  **Why**: DoD evaluation for ISSUE_KEY implementation
-  **Where**: specs/issue-ISSUE_KEY-spec.md, specs/issue-ISSUE_KEY-progress.md
-  **Learned**: <EVALUATOR_OUTPUT failure details if FAIL, omit if PASS>
+`mem_update` with `topic_key: "loop/ISSUE_KEY/passes"`, `title: "Loop Pass PASS_NUMBER — <PASS or FAIL> for ISSUE_KEY"`, `type: manual`, `scope: project`, content What/Why/Where/Learned (Learned = EVALUATOR_OUTPUT failure details if FAIL).
 
-If Engram MCP is unavailable, append to `specs/issue-ISSUE_KEY-progress.md`:
-
+If Engram is unavailable, append to `progress.md`:
 ```markdown
 ## Loop Pass PASS_NUMBER — <PASS or FAIL>
 Evaluator output:
@@ -115,14 +85,14 @@ Increment PASS_NUMBER.
 
 ## Step 4 — Report
 
-If VERDICT == "PASS":
+PASS:
 ```
 ✅ Implementation complete for ISSUE_KEY (pass PASS_NUMBER-1 / MAX_PASSES).
    All DoD items satisfied.
    See specs/issue-ISSUE_KEY-progress.md for the full trail.
 ```
 
-If VERDICT == "FAIL" after exhausting MAX_PASSES:
+FAIL after the budget:
 ```
 ⚠️  ISSUE_KEY hit the pass budget (MAX_PASSES passes) without satisfying all DoD items.
 Remaining failures:
