@@ -77,27 +77,13 @@ before ending, choosing the `stage` of the phase being exited and a `reason`
 that describes the stop. When adding a new exit point to this command, add its
 `Result hook` line in the same edit.
 
-### Comment mirror (C11) — exactly one result comment (Foundry mode)
+### Comment mirror (surface op F3) — exactly one result comment (Foundry mode)
 
 In Foundry mode every exit upserts a single issue comment carrying the marker
-line `<!-- opencode-flow:result -->` (AC7). The comment body is written to
-`result-comment.md`: marker line first, then `outcome`, `stage`, `reason`,
-`branch`, `pr_url` and the run timestamp. Find-then-PATCH, else create:
-
-```bash
-timeout 120 gh api "repos/<OWNER>/<REPO>/issues/<N>/comments" --jq '.[] | select(.body | contains("<!-- opencode-flow:result -->")) | .id'
-```
-- Found ⇒ update (the `-X PATCH` stays explicit — payload params alone would
-  silently switch the method to POST):
-```bash
-timeout 120 gh api "repos/<OWNER>/<REPO>/issues/comments/<ID>" -X PATCH -F body=@result-comment.md
-```
-- Not found ⇒ create:
-```bash
-timeout 120 gh api "repos/<OWNER>/<REPO>/issues/<N>/comments" -F body=@result-comment.md
-```
-
-`-F` with `@` reads the file (verified for gh 2.98.0 in `specs/issue-13-extdocs.md`).
+line `<!-- opencode-flow:result -->` (AC7). Run surface operation **F3** with
+`$GH_OWNER`, `$GH_REPO`, `$GH_ISSUE_NUMBER`, `$RESULT_COMMENT_FILE`.
+The comment body is written to `result-comment.md`: marker line first, then `outcome`, `stage`, `reason`,
+`branch`, `pr_url` and the run timestamp. F3 finds by marker → PATCH, else create — exactly one marker comment per issue.
 Token hygiene (AC9): no token value ever appears in argv, stdout, `result.json`,
 comments, or files — rely on ambient `gh auth` only. Delete `result-comment.md`
 after the upsert; it is never committed.
@@ -176,6 +162,12 @@ Extract:
   Foundry mode activates Steps 0.6/0.7/0.1-F/0.8, the Push Protocol, the Step 8e-L
   land path, and the Foundry Stop Protocol. Any other combination takes the existing
   interactive path, byte-for-byte unchanged.
+
+**Load skill (AC1):** Foundry mode loads the shared surface:
+```
+Load skill: foundry-headless-contract
+```
+Reference operations F1–F4 from the skill; do not duplicate inline `gh project` recipes.
 - **QUICK × FOUNDRY**: `--quick` remains allowed in Foundry mode; it only skips the
   spec review gate — that semantics is unchanged (FR14).
 
@@ -267,19 +259,11 @@ timeout 120 gh issue view <ISSUE_NUMBER> --json body --jq '.body'
 If ISSUE_NUMBER is unset (a file-path argument under FOUNDRY_MODE), or the call
 fails or times out ⇒ E19 (live-body read failure).
 
-**Project discovery (C1):** resolve the board from the repo:
-```bash
-timeout 120 gh api graphql -f query='{ repository(owner:"<OWNER>", name:"<REPO>") { id projectsV2(first:10){ nodes{ id number title url owner { __typename ... on User { login } ... on Organization { login } } } } } }'
-```
-**Exactly one** project node must resolve — zero or two-or-more ⇒ E19 (fail closed
-before any write; when no board resolves, no `Blocked` write is attempted). Set
-**PROJECT_NUMBER** from the node `number` and **PROJECT_OWNER** from the node
-`owner.login`, falling back to parsing the project `url` when login is null.
+**Project discovery (surface op F1):** run surface operation **F1** with `$GH_OWNER`, `$GH_REPO`.
+Exactly one node ⇒ bind `PROJECT_NUMBER`, `PROJECT_OWNER` (fallback to URL parse).
+Zero or ≥2 nodes ⇒ E19 (fail closed before any write; when no board resolves, no `Blocked` write is attempted).
 
-**Field precheck (C2):**
-```bash
-timeout 120 gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json
-```
+**Field precheck (surface op F2):** run surface operation **F2** precheck with `$PROJECT_NUMBER`, `$PROJECT_OWNER`.
 `Status` must be a single-select field containing the exact option names
 `In Progress` and `Blocked` (plus readable `Ready` and `Integrated`). The Foundry
 cannot ask, so it fails: any missing field or option ⇒ E19. This step never creates or renames options
@@ -303,12 +287,7 @@ timeout 120 gh issue view <M> -R <OWNER>/<REPO> --json state
   Pass ⇔ state is `CLOSED` (or `MERGED` where the ref resolves to a merged PR).
 - **C4 board Status (same-repo OPEN refs only):** the `Integrated` escape hatch is
   same-repo only — an external OPEN ref always fails. Read the blocker item's
-  Status via the GraphQL single-select value node (canonical per
-  `specs/issue-13-extdocs.md` — the `item-list --field` JSON key shape is
-  unreliable, so the GraphQL value node is authoritative):
-```bash
-timeout 120 gh api graphql -f query='{ repository(owner:"<OWNER>", name:"<REPO>") { issue(number: <M>) { projectItems(first: 20) { nodes { fieldValues(first: 20) { nodes { ... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } } } } } } } } }'
-```
+  Status via GraphQL (canonical per `specs/issue-13-extdocs.md`).
   Pass ⇔ a node with `field.name == "Status"` and `name == "Integrated"` (exact, case-sensitive).
   Any other value, zero Status nodes, or a query error ⇒ E19.
 
@@ -319,12 +298,9 @@ An unresolved blocker ref ⇒ E19. C13 bounds: every call above is wrapped
 
 Runs ONLY when FOUNDRY_MODE is `true`, immediately after Step 0.6 passes and
 before Step 0.1 — the claim is written before the first `git checkout -b`, commit, or push (AC2).
-Write (C5):
-```bash
-timeout 120 gh project item-edit PROJECT_NUMBER --owner PROJECT_OWNER --url <issue-url> --field "Status" --value "In Progress"
-```
+Run surface op **F2** with `$TARGET_STATUS` = `In Progress`.
 The value is exactly `In Progress` (case-sensitive, per the exact option names the
-C2 precheck verified). **Never write `Ready` or `Integrated`** — `Ready` is
+precheck verified). **Never write `Ready` or `Integrated`** — `Ready` is
 /brainstorm-owned and `Integrated` is the host reconciler's; `Blocked` is written
 only by the Foundry Stop Protocol below.
 
@@ -348,8 +324,7 @@ It is defined once here and referenced by each stop — stops do NOT restate it:
 3. **Close the PR if one exists** — `timeout 120 gh pr close "$PR_NUMBER"`, and
    only when the mutex PR exists (Step 0.8 onward). Pre-mutex stops (E19/E20/E21)
    skip this — no PR exists yet.
-4. **Board release** — set the item to `Blocked` (C6):
-   `timeout 120 gh project item-edit PROJECT_NUMBER --owner PROJECT_OWNER --url <issue-url> --field "Status" --value "Blocked"`.
+4. **Board release** — set the item to `Blocked` (surface op **F2** with `$TARGET_STATUS` = `Blocked`).
    When PROJECT_NUMBER/PROJECT_OWNER were never resolved (discovery failed) or the
    write itself fails, record the error and continue — never abort mid-stop.
 5. **Stop message** — print the distinct Foundry anchor: post-mutex stops print

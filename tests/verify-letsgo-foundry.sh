@@ -59,6 +59,7 @@ set -u
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CMD="$REPO_ROOT/commands/letsgo.md"
 IMPL="$REPO_ROOT/agents/spec-implementer.md"
+SKILL="$REPO_ROOT/skills/foundry-headless-contract/SKILL.md"
 
 PASS=0
 FAIL=0
@@ -143,21 +144,21 @@ contains "UT3 grammar violation fails closed" "$CMD" 'fails closed'
 contains "UT3 no-blockers line" "$CMD" 'None — can start immediately'
 contains "UT3 C3 same-repo state command" "$CMD" 'timeout 120 gh issue view <M> --json state'
 contains "UT3 C3 external state command" "$CMD" 'timeout 120 gh issue view <M> -R <OWNER>/<REPO> --json state'
-contains "UT3 C4 GraphQL single-select value node" "$CMD" '... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }'
+contains "UT3 C4 GraphQL single-select value node" "$SKILL" '... on ProjectV2ItemFieldSingleSelectValue { name field { ... on ProjectV2FieldCommon { name } } }'
 contains "UT3 C4 Integrated exact match" "$CMD" '`name == "Integrated"` (exact, case-sensitive)'
-contains "UT3 C1 projectsV2 discovery query" "$CMD" 'projectsV2(first:10){ nodes{ id number title url owner'
-contains "UT3 C1 exactly-one fail-closed rule" "$CMD" 'project node must resolve — zero or two-or-more'
-contains "UT3 C2 field-list precheck command" "$CMD" 'timeout 120 gh project field-list PROJECT_NUMBER --owner PROJECT_OWNER --format json'
-contains "UT3 C2 no option creation" "$CMD" 'never creates or renames options'
+contains "UT3 C1 projectsV2 discovery query" "$SKILL" 'projectsV2(first:10){ nodes{ id number title url owner'
+contains "UT3 C1 exactly-one fail-closed rule" "$SKILL" 'Exactly one project node'
+contains "UT3 C2 field-list precheck command" "$SKILL" 'timeout 120 gh project field-list'
+contains "UT3 C2 no option creation" "$SKILL" 'Never `field-create`, never rename, never add options'
 hook_near "UT3 E19 hook adjacent to the preflight exit contract" 'Result hook (E19)' 'Foundry preflight failed: <specific>'
 
 # UT4 — Step 0.7 board claim + release values (C5/C6)
 contains "UT4 Step 0.7 heading" "$CMD" '## Step 0.7 — Board claim (In Progress)'
-contains "UT4 C5 claim exact value" "$CMD" '--field "Status" --value "In Progress"'
-contains "UT4 C6 release exact value" "$CMD" '--field "Status" --value "Blocked"'
+contains "UT4 C5 claim exact value" "$SKILL" '--value "$TARGET_STATUS"'
+contains "UT4 C6 release exact value" "$SKILL" '--value "$TARGET_STATUS"'
 contains "UT4 claim precedes branch ops" "$CMD" 'before the first `git checkout -b`, commit, or push'
-contains "UT4 never Ready/Integrated write" "$CMD" 'Never write `Ready` or `Integrated`'
-contains "UT4 exact case-sensitive values" "$CMD" 'case-sensitive'
+contains "UT4 never Ready/Integrated write" "$SKILL" 'Never write `Ready` or `Integrated`'
+contains "UT4 exact case-sensitive values" "$SKILL" 'exact, case-sensitive'
 hook_near "UT4 E20 hook adjacent to the board claim failure" 'Result hook (E20)' 'Board claim failed:'
 
 # Foundry Stop Protocol — single definition, distinct anchors (anchor budget)
@@ -425,12 +426,12 @@ else bad "S3-E19 fixture failed frozen-schema shape validation"; fi
 printf '\n=== Sub-task 5 — observability: comment mirror + hooks table (seam S1) ===\n'
 
 # UT11 — C11 comment upsert contract + token hygiene + hook table registration
-contains "UT11 marker literal pinned" "$CMD" '<!-- opencode-flow:result -->'
-contains "UT11 find step (jq select on marker)" "$CMD" 'select(.body | contains("<!-- opencode-flow:result -->")) | .id'
-contains "UT11 PATCH update path" "$CMD" '-X PATCH -F body=@result-comment.md'
-contains "UT11 create path" "$CMD" 'issues/<N>/comments" -F body=@result-comment.md'
+contains "UT11 marker literal pinned" "$SKILL" '<!-- opencode-flow:result -->'
+contains "UT11 find step (jq select on marker)" "$SKILL" 'select(.body | contains("<!-- opencode-flow:result -->")) | .id'
+contains "UT11 PATCH update path" "$SKILL" '-X PATCH'
+contains "UT11 create path" "$SKILL" 'Create (if not found)'
 contains "UT11 token hygiene rule (AC9)" "$CMD" 'no token value ever appears in argv, stdout'
-contains "UT11 comment mirror section" "$CMD" '### Comment mirror (C11) — exactly one result comment (Foundry mode)'
+contains "UT11 comment mirror section" "$CMD" '### Comment mirror (surface op F3) — exactly one result comment (Foundry mode)'
 contains "UT11 hooks table section" "$CMD" '### Foundry hooks (E18–E23, E17-F) — registered per the standing rule'
 contains "UT11 hooks row E18" "$CMD" '| E18 |'
 contains "UT11 hooks row E19" "$CMD" '| E19 |'
@@ -441,9 +442,9 @@ contains "UT11 hooks row E23" "$CMD" '| E23 |'
 contains "UT11 hooks row E17-F" "$CMD" '| E17-F |'
 
 # UT12 — timeout bound per network-command class + gtimeout fallback note
-contains "UT12 timeout bound on board writes" "$CMD" 'timeout 120 gh project item-edit'
-contains "UT12 timeout bound on graphql calls" "$CMD" 'timeout 120 gh api graphql'
-contains "UT12 timeout bound on comment mirror" "$CMD" 'timeout 120 gh api "repos'
+contains "UT12 timeout bound on board writes" "$SKILL" 'timeout 120 gh project'
+contains "UT12 timeout bound on graphql calls" "$SKILL" 'timeout 120 gh api graphql'
+contains "UT12 timeout bound on comment mirror" "$SKILL" 'timeout 120 gh api "repos'
 contains "UT12 timeout bound on land edits" "$CMD" 'timeout 120 gh pr edit'
 contains "UT12 timeout bound on merge" "$CMD" 'timeout 120 gh pr merge'
 contains "UT12 timeout bound on pr close" "$CMD" 'timeout 120 gh pr close'
